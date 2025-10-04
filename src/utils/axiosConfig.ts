@@ -24,6 +24,10 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       sessionStorage.removeItem('token');
+      
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }

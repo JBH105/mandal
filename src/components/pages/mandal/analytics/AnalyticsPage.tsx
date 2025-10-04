@@ -4,18 +4,19 @@ import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {Table,TableBody,TableCell,TableHead,TableHeader,TableRow,} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import {Select,SelectContent,SelectItem,SelectTrigger,SelectValue,} from "@/components/ui/select";
-import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogTrigger,} from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {Plus,Calendar, DollarSign, TrendingUp, Minus, User,} from "lucide-react";
-import { getMandals, getMandalSubUsersApi, createMandalSubUserApi, createMemberDataApi, getMemberDataApi, getAllMonthsApi, MemberData, } from "@/auth/auth";
+import { Plus, Calendar } from "lucide-react";
+import { getMandals, getMandalSubUsersApi, createMandalSubUserApi, createMemberDataApi, getMemberDataApi, getAllMonthsApi, MemberData } from "@/auth/auth";
 import { showErrorToast, showSuccessToast } from "@/lib/toast";
 import { HiOutlineUserGroup } from "react-icons/hi";
 import { BiDollar } from "react-icons/bi";
-import { HiArrowTrendingUp,HiArrowTrendingDown  } from "react-icons/hi2";
+import { HiArrowTrendingUp, HiArrowTrendingDown } from "react-icons/hi2";
+import { validateNewMemberForm, cleanPhoneNumberForPayload, formatPhoneNumber, ValidationErrors } from "./validation";
 
 interface Calculations {
   totalInstallments: number;
@@ -43,7 +44,7 @@ interface FormData {
   newWithdrawal: string;
 }
 
-interface NewMemberForm {
+export interface NewMemberForm {
   subUserName: string;
   phoneNumber: string;
 }
@@ -78,6 +79,11 @@ export default function AnalyticsPage() {
     subUserName: "",
     phoneNumber: "",
   });
+  const [errors, setErrors] = useState<ValidationErrors>({});
+  const [touched, setTouched] = useState<{ subUserName: boolean; phoneNumber: boolean }>({
+    subUserName: false,
+    phoneNumber: false,
+  });
 
   // Fetch Mandal data to get mandal ID and details
   useEffect(() => {
@@ -108,7 +114,7 @@ export default function AnalyticsPage() {
         const filteredUsers = users.filter((user: SubUser) => user.mandal === mandalId);
         setSubUsers(filteredUsers);
       } catch (error) {
-        console.log("🚀 ~ fetchSubUsers ~ error:", error)
+        console.log("🚀 ~ fetchSubUsers ~ error:", error);
         showErrorToast("Error fetching sub-users:");
         setSubUsers([]);
       }
@@ -121,7 +127,6 @@ export default function AnalyticsPage() {
     const fetchAllMonths = async () => {
       try {
         let allMonths = await getAllMonthsApi();
-        // Ensure allMonths is an array
         if (!Array.isArray(allMonths)) {
           console.warn("getAllMonthsApi did not return an array:", allMonths);
           allMonths = [];
@@ -137,7 +142,7 @@ export default function AnalyticsPage() {
       } catch (error) {
         showErrorToast("Error fetching all months:");
         console.error(error);
-        setMonths([]); // Fallback to empty array on error
+        setMonths([]);
       }
     };
     fetchAllMonths();
@@ -151,7 +156,7 @@ export default function AnalyticsPage() {
         const data: MemberData[] = await getMemberDataApi(selectedMonth);
         setMemberData(data);
       } catch (error) {
-        console.log("🚀 ~ fetchMemberData ~ error:", error)
+        console.log("🚀 ~ fetchMemberData ~ error:", error);
         showErrorToast("Error fetching member data:");
       }
     };
@@ -185,27 +190,51 @@ export default function AnalyticsPage() {
   calculations.interestPerPerson = calculations.totalMembers > 0 ? calculations.totalInterest / calculations.totalMembers : 0;
   calculations.perPerson = calculations.totalMembers > 0 ? calculations.bandSilak / calculations.totalMembers : 0;
 
+  // Get errors only for touched fields
+  const getFilteredErrors = () => {
+    const allErrors = validateNewMemberForm(newMemberData);
+    const filtered: ValidationErrors = {};
+    if (touched.subUserName && allErrors.subUserName) {
+      filtered.subUserName = allErrors.subUserName;
+    }
+    if (touched.phoneNumber && allErrors.phoneNumber) {
+      filtered.phoneNumber = allErrors.phoneNumber;
+    }
+    return filtered;
+  };
+
   const handleAddMember = async () => {
-    if (!newMemberData?.subUserName || !newMemberData?.phoneNumber) {
-      showErrorToast("Please fill all fields");
+    // Full validation on submit
+    const validationErrors = validateNewMemberForm(newMemberData);
+    setErrors(validationErrors);
+    setTouched({ subUserName: true, phoneNumber: true }); // Show all errors on submit attempt
+
+    if (Object.keys(validationErrors).length > 0) {
+      showErrorToast("Please fix the errors in the form");
       return;
     }
 
     try {
       const response = await createMandalSubUserApi({
-        subUserName: newMemberData?.subUserName,
-        phoneNumber: newMemberData?.phoneNumber,
+        subUserName: newMemberData.subUserName,
+        phoneNumber: cleanPhoneNumberForPayload(newMemberData.phoneNumber),
       });
 
       showSuccessToast(response.message || "Sub-user created successfully");
-      // Add new sub-user to the list if it matches the mandalId
       if (response.mandal === mandalId) {
-        setSubUsers([...subUsers, { _id: response._id, mandal: response.mandal, ...newMemberData }]);
+        setSubUsers([...subUsers, { 
+          _id: response._id, 
+          mandal: response.mandal, 
+          subUserName: newMemberData.subUserName,
+          phoneNumber: cleanPhoneNumberForPayload(newMemberData.phoneNumber) 
+        }]);
       }
       setNewMemberData({ subUserName: "", phoneNumber: "" });
+      setErrors({});
+      setTouched({ subUserName: false, phoneNumber: false });
       setIsAddMemberDialogOpen(false);
     } catch (error) {
-      console.log("🚀 ~ handleAddMember ~ error:", error)
+      console.log("🚀 ~ handleAddMember ~ error:", error);
       showErrorToast("Failed to create sub-user");
     }
   };
@@ -231,11 +260,9 @@ export default function AnalyticsPage() {
       const response = await createMemberDataApi(data);
       showSuccessToast(response.message || "Member data added successfully");
 
-      // Refresh member data
       const updatedData = await getMemberDataApi(selectedMonth);
       setMemberData(updatedData);
 
-      // Reset form
       setFormData({
         subUserId: "",
         installment: "",
@@ -247,7 +274,7 @@ export default function AnalyticsPage() {
       });
       setIsAddDialogOpen(false);
     } catch (error) {
-      console.log("🚀 ~ handleAddData ~ error:", error)
+      console.log("🚀 ~ handleAddData ~ error:", error);
       showErrorToast("Failed to add member data");
     }
   };
@@ -291,13 +318,10 @@ export default function AnalyticsPage() {
         await createMemberDataApi(data);
       }
 
-      // Refetch all months to include the new one
       const allMonths = await getAllMonthsApi();
-      // Ensure allMonths is an array
       const validMonths = Array.isArray(allMonths) ? allMonths : [];
       setMonths(validMonths);
 
-      // Set the new month as selected and fetch its data
       setSelectedMonth(newMonth);
       const data = await getMemberDataApi(newMonth);
       setMemberData(data);
@@ -309,6 +333,40 @@ export default function AnalyticsPage() {
     }
   };
 
+  // Handle name input change
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setNewMemberData({ ...newMemberData, subUserName: value });
+    setTouched({ ...touched, subUserName: true });
+    setErrors(getFilteredErrors());
+  };
+
+  // Handle phone number input change
+  const handlePhoneNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value;
+    if (!value.startsWith("+91 ")) {
+      value = "+91 " + value.replace(/^\+91\s*/, "");
+    }
+    const digits = value.replace(/^\+91\s*/, "").replace(/\s/g, "").replace(/\D/g, "");
+    const formattedValue = formatPhoneNumber(digits);
+    setNewMemberData({ ...newMemberData, phoneNumber: formattedValue });
+    setTouched({ ...touched, phoneNumber: true });
+    setErrors(getFilteredErrors());
+  };
+
+  // Reset form on dialog close
+  const handleDialogClose = (open: boolean) => {
+    if (!open) {
+      setNewMemberData({ subUserName: "", phoneNumber: "" });
+      setErrors({});
+      setTouched({ subUserName: false, phoneNumber: false });
+    }
+    setIsAddMemberDialogOpen(open);
+  };
+
+  // Check if field has error and is touched
+  const hasError = (field: keyof typeof touched) => touched[field] && !!errors[field];
+
   return (
     <>
       <PageHeader
@@ -316,249 +374,266 @@ export default function AnalyticsPage() {
         description="View your monthly ledger, withdrawals, and interest earnings in one place."
       >
         <div className="flex flex-col gap-2 sm:flex-row sm:gap-2">
-          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="w-[180px] sm:w-[180px]">
-              <Calendar className="h-4 w-4 mr-2" />
-              <SelectValue placeholder="Select month" />
-            </SelectTrigger>
-            <SelectContent>
-              {Array.isArray(months) && months.length > 0 ? (
-                months.map((month) => (
-                  <SelectItem key={month} value={month}>
-                    {new Date(month + "-01").toLocaleString("default", {
-                      month: "long",
-                      year: "numeric",
-                    })}
+          <div className="flex flex-row gap-2">
+            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <SelectTrigger className="w-[180px] sm:w-[180px]">
+                <Calendar className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Select month" />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.isArray(months) && months.length > 0 ? (
+                  months.map((month) => (
+                    <SelectItem key={month} value={month}>
+                      {new Date(month + "-01").toLocaleString("default", {
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="none" disabled>
+                    No months available
                   </SelectItem>
-                ))
-              ) : (
-                <SelectItem value="none" disabled>
-                  No months available
-                </SelectItem>
-              )}
-            </SelectContent>
-          </Select>
+                )}
+              </SelectContent>
+            </Select>
 
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="w-full sm:w-auto" disabled={!selectedMonth}>
-                <Plus className="h-4 w-4" />
-                Update Member Data
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-[90vw] p-4 sm:max-w-2xl sm:p-6">
-              <DialogHeader>
-                <DialogTitle className="text-base sm:text-xl">
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="w-auto sm:w-auto" disabled={!selectedMonth}>
+                  <Plus className="h-4 w-4" />
                   Update Member Data
-                </DialogTitle>
-              </DialogHeader>
-              <div className="grid grid-cols-1 gap-3 py-3 sm:grid-cols-2 sm:gap-4 sm:py-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="subUserId" className="text-sm sm:text-base">
-                    સભ્યનું નામ (Member Name)
-                  </Label>
-                  <Select
-                    value={formData.subUserId}
-                    onValueChange={(value) => {
-                      const existing = memberData.find(m => m.subUser?._id === value);
-                      if (existing) {
-                        setFormData({
-                          subUserId: value,
-                          installment: existing.installment.toString(),
-                          amount: existing.amount.toString(),
-                          interest: existing.interest.toString(),
-                          fine: existing.fine.toString(),
-                          withdrawal: existing.withdrawal.toString(),
-                          newWithdrawal: existing.newWithdrawal.toString(),
-                        });
-                      } else {
-                        setFormData({
-                          subUserId: value,
-                          installment: "",
-                          amount: "",
-                          interest: "",
-                          fine: "",
-                          withdrawal: "",
-                          newWithdrawal: "",
-                        });
-                      }
-                    }}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-[90vw] p-4 sm:max-w-2xl sm:p-6">
+                <DialogHeader>
+                  <DialogTitle className="text-base sm:text-xl">
+                    Update Member Data
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="grid grid-cols-1 gap-3 py-3 sm:grid-cols-2 sm:gap-4 sm:py-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="subUserId" className="text-sm sm:text-base">
+                      સભ્યનું નામ (Member Name)
+                    </Label>
+                    <Select
+                      value={formData.subUserId}
+                      onValueChange={(value) => {
+                        const existing = memberData.find(m => m.subUser?._id === value);
+                        if (existing) {
+                          setFormData({
+                            subUserId: value,
+                            installment: existing.installment.toString(),
+                            amount: existing.amount.toString(),
+                            interest: existing.interest.toString(),
+                            fine: existing.fine.toString(),
+                            withdrawal: existing.withdrawal.toString(),
+                            newWithdrawal: existing.newWithdrawal.toString(),
+                          });
+                        } else {
+                          setFormData({
+                            subUserId: value,
+                            installment: "",
+                            amount: "",
+                            interest: "",
+                            fine: "",
+                            withdrawal: "",
+                            newWithdrawal: "",
+                          });
+                        }
+                      }}
+                      disabled={subUsers?.length === 0}
+                    >
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            subUsers?.length === 0
+                              ? "No member added"
+                              : "Select member"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {subUsers?.map((user) => (
+                          <SelectItem key={user?._id} value={user?._id}>
+                            {user?.subUserName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="installment" className="text-sm sm:text-base">
+                      હપ્તો (Installment)
+                    </Label>
+                    <Input
+                      id="installment"
+                      type="number"
+                      value={formData?.installment}
+                      onChange={(e) => setFormData({ ...formData, installment: e.target.value })}
+                      placeholder="1000"
+                      className="text-sm sm:text-base"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="amount" className="text-sm sm:text-base">
+                      આ નો ઉ. (Amount)
+                    </Label>
+                    <Input
+                      id="amount"
+                      type="number"
+                      value={formData?.amount}
+                      onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                      placeholder="0"
+                      className="text-sm sm:text-base"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="interest" className="text-sm sm:text-base">
+                      બ્યાજ (Interest)
+                    </Label>
+                    <Input
+                      id="interest"
+                      type="number"
+                      value={formData?.interest}
+                      onChange={(e) => setFormData({ ...formData, interest: e.target.value })}
+                      placeholder="0"
+                      className="text-sm sm:text-base"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="fine" className="text-sm sm:text-base">
+                      દંડ (Fine)
+                    </Label>
+                    <Input
+                      id="fine"
+                      type="number"
+                      value={formData?.fine}
+                      onChange={(e) => setFormData({ ...formData, fine: e.target.value })}
+                      placeholder="0"
+                      className="text-sm sm:text-base"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="withdrawal" className="text-sm sm:text-base">
+                      ઉપાડ જમા (Withdrawal)
+                    </Label>
+                    <Input
+                      id="withdrawal"
+                      type="number"
+                      value={formData?.withdrawal}
+                      onChange={(e) => setFormData({ ...formData, withdrawal: e.target.value })}
+                      placeholder="0"
+                      className="text-sm sm:text-base"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="newWithdrawal" className="text-sm sm:text-base">
+                      નવો ઉપાડ (New Withdrawal)
+                    </Label>
+                    <Input
+                      id="newWithdrawal"
+                      type="number"
+                      value={formData?.newWithdrawal}
+                      onChange={(e) => setFormData({ ...formData, newWithdrawal: e.target.value })}
+                      placeholder="0"
+                      className="text-sm sm:text-base"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    type="button"
+                    onClick={() => setIsAddDialogOpen(false)}
+                    className="text-sm sm:text-base"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleAddData}
+                    className="text-sm sm:text-base"
                     disabled={subUsers?.length === 0}
                   >
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder={
-                          subUsers?.length === 0
-                            ? "No member added"
-                            : "Select member"
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {subUsers?.map((user) => (
-                        <SelectItem key={user?._id} value={user?._id}>
-                          {user?.subUserName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    Add Data
+                  </Button>
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="installment" className="text-sm sm:text-base">
-                    હપ્તો (Installment)
-                  </Label>
-                  <Input
-                    id="installment"
-                    type="number"
-                    value={formData?.installment}
-                    onChange={(e) => setFormData({ ...formData, installment: e.target.value })}
-                    placeholder="1000"
-                    className="text-sm sm:text-base"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="amount" className="text-sm sm:text-base">
-                    આ નો ઉ. (Amount)
-                  </Label>
-                  <Input
-                    id="amount"
-                    type="number"
-                    value={formData?.amount}
-                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                    placeholder="0"
-                    className="text-sm sm:text-base"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="interest" className="text-sm sm:text-base">
-                    બ્યાજ (Interest)
-                  </Label>
-                  <Input
-                    id="interest"
-                    type="number"
-                    value={formData?.interest}
-                    onChange={(e) => setFormData({ ...formData, interest: e.target.value })}
-                    placeholder="0"
-                    className="text-sm sm:text-base"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="fine" className="text-sm sm:text-base">
-                    દંડ (Fine)
-                  </Label>
-                  <Input
-                    id="fine"
-                    type="number"
-                    value={formData?.fine}
-                    onChange={(e) => setFormData({ ...formData, fine: e.target.value })}
-                    placeholder="0"
-                    className="text-sm sm:text-base"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="withdrawal" className="text-sm sm:text-base">
-                    ઉપાડ જમા (Withdrawal)
-                  </Label>
-                  <Input
-                    id="withdrawal"
-                    type="number"
-                    value={formData?.withdrawal}
-                    onChange={(e) => setFormData({ ...formData, withdrawal: e.target.value })}
-                    placeholder="0"
-                    className="text-sm sm:text-base"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="newWithdrawal" className="text-sm sm:text-base">
-                    નવો ઉપાડ (New Withdrawal)
-                  </Label>
-                  <Input
-                    id="newWithdrawal"
-                    type="number"
-                    value={formData?.newWithdrawal}
-                    onChange={(e) => setFormData({ ...formData, newWithdrawal: e.target.value })}
-                    placeholder="0"
-                    className="text-sm sm:text-base"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsAddDialogOpen(false)}
-                  className="text-sm sm:text-base"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleAddData}
-                  className="text-sm sm:text-base"
-                  disabled={subUsers?.length === 0}
-                >
-                  Add Data
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+          </div>
 
-          <Dialog open={isAddMemberDialogOpen} onOpenChange={setIsAddMemberDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="w-full sm:w-auto">
-                <Plus className="h-4 w-4" />
-                Add Member
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-[90vw] p-4 sm:max-w-md sm:p-6">
-              <DialogHeader>
-                <DialogTitle className="text-base sm:text-xl">
-                  Add New Member
-                </DialogTitle>
-              </DialogHeader>
-              <div className="grid grid-cols-1 gap-3 py-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="subUserName" className="text-sm sm:text-base">
-                    Member Name
-                  </Label>
-                  <Input
-                    id="subUserName"
-                    value={newMemberData?.subUserName}
-                    onChange={(e) => setNewMemberData({ ...newMemberData, subUserName: e.target.value })}
-                    placeholder="Enter member name"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="phoneNumber" className="text-sm sm:text-base">
-                    Phone Number
-                  </Label>
-                  <Input
-                    id="phoneNumber"
-                    type="tel"
-                    value={newMemberData?.phoneNumber}
-                    onChange={(e) => setNewMemberData({ ...newMemberData, phoneNumber: e.target.value })}
-                    placeholder="Enter phone number"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 mt-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsAddMemberDialogOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button onClick={handleAddMember}>Add Member</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          <Button onClick={handleAddNewMonth} className="w-full sm:w-auto">
+          <Button onClick={handleAddNewMonth} className="w-auto text-sm px-2 py-1 self-start sm:w-auto sm:text-base sm:px-4 sm:py-2">
             <Plus className="h-4 w-4" />
             Add New Month
           </Button>
 
-          {/* <Button variant="outline" className="w-full sm:w-auto">
-            Export Report
-          </Button> */}
+          <div className="fixed bottom-4 right-4 sm:static sm:bottom-auto sm:right-auto">
+            <Dialog open={isAddMemberDialogOpen} onOpenChange={handleDialogClose}>
+              <DialogTrigger asChild>
+                <Button className="w-12 h-12 rounded-full sm:rounded sm:w-auto sm:h-auto sm:p-2 flex items-center justify-center">
+                  <Plus className="h-6 w-6 sm:h-4 sm:w-4" />
+                  <span className="hidden sm:inline">Add Member</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-[90vw] p-4 sm:max-w-md sm:p-6">
+                <DialogHeader>
+                  <DialogTitle className="text-base sm:text-xl">
+                    Add New Member
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="grid grid-cols-1 gap-3 py-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="subUserName" className="text-sm sm:text-base">
+                      Member Name
+                    </Label>
+                    <Input
+                      id="subUserName"
+                      value={newMemberData.subUserName}
+                      onChange={handleNameChange}
+                      placeholder="Enter member name"
+                      className={hasError("subUserName") ? "border-red-500 focus:ring-red-500" : ""}
+                    />
+                    {hasError("subUserName") && (
+                      <p className="text-red-500 text-xs mt-1">{errors.subUserName}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="phoneNumber" className="text-sm sm:text-base">
+                      Phone Number
+                    </Label>
+                    <Input
+                      id="phoneNumber"
+                      type="tel"
+                      value={newMemberData.phoneNumber}
+                      onChange={handlePhoneNumberChange}
+                      placeholder="+91 12345 67890"
+                      className={hasError("phoneNumber") ? "border-red-500 focus:ring-red-500" : ""}
+                    />
+                    {hasError("phoneNumber") && (
+                      <p className="text-red-500 text-xs mt-1">{errors.phoneNumber}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 mt-4">
+                  <Button
+                    variant="outline"
+                    type="button"
+                    onClick={() => handleDialogClose(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleAddMember}
+                    disabled={Object.keys(validateNewMemberForm(newMemberData)).length > 0}
+                  >
+                    Add Member
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </PageHeader>
 
@@ -614,7 +689,7 @@ export default function AnalyticsPage() {
         </Card>
       </div>
 
-      <Card className="hidden lg:block">
+      <Card className="">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
@@ -629,9 +704,6 @@ export default function AnalyticsPage() {
               </div>
             </div>
             <div className="flex gap-2">
-              {/* <Button variant="outline" size="sm">
-                Print
-              </Button> */}
               <Button variant="outline" size="sm">
                 Export
               </Button>
@@ -639,19 +711,19 @@ export default function AnalyticsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
+          <div className="overflow-x-auto max-w-[calc(100vw-2rem)] sm:max-w-none">
+            <Table className="min-w-[800px]">
               <TableHeader>
                 <TableRow className="bg-muted/50">
                   <TableHead className="w-12 text-center font-semibold">ક્રમ નં.</TableHead>
-                  <TableHead className="min-w-[200px] font-semibold">સભ્યનું નામ</TableHead>
-                  <TableHead className="text-center font-semibold">હપ્તો</TableHead>
-                  <TableHead className="text-center font-semibold">આ.નો ઉ.</TableHead>
-                  <TableHead className="text-center font-semibold">વ્યાજ</TableHead>
-                  <TableHead className="text-center font-semibold">દંડ</TableHead>
-                  <TableHead className="text-center font-semibold">ઉપાડ જમા</TableHead>
-                  <TableHead className="text-center font-semibold">નવો ઉપાડ</TableHead>
-                  <TableHead className="text-center font-semibold">હપ્તો + વ્યાજ</TableHead>
+                  <TableHead className="min-w-[150px] font-semibold">સભ્યનું નામ</TableHead>
+                  <TableHead className="text-center font-semibold min-w-[100px]">હપ્તો</TableHead>
+                  <TableHead className="text-center font-semibold min-w-[100px]">આ.નો ઉ.</TableHead>
+                  <TableHead className="text-center font-semibold min-w-[100px]">વ્યાજ</TableHead>
+                  <TableHead className="text-center font-semibold min-w-[100px]">દંડ</TableHead>
+                  <TableHead className="text-center font-semibold min-w-[100px]">ઉપાડ જમા</TableHead>
+                  <TableHead className="text-center font-semibold min-w-[100px]">નવો ઉપાડ</TableHead>
+                  <TableHead className="text-center font-semibold min-w-[100px]">હપ્તો + વ્યાજ</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -685,111 +757,6 @@ export default function AnalyticsPage() {
           </div>
         </CardContent>
       </Card>
-
-      <div className="lg:hidden">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-bold text-red-600">{mandalName}</h3>
-            <div className="flex gap-2 mt-1">
-              <Badge variant="outline" className="text-xs">{calculations?.totalMembers} Members</Badge>
-              <Badge variant="outline" className="text-xs">
-                {selectedMonth
-                  ? new Date(selectedMonth + "-01").toLocaleDateString("en-GB")
-                  : "No Month Selected"}
-              </Badge>
-            </div>
-          </div>
-          <div className="flex gap-1">
-            <Button variant="outline" size="sm" className="text-xs px-2 bg-transparent">
-              Print
-            </Button>
-            <Button variant="outline" size="sm" className="text-xs px-2 bg-transparent">
-              Export
-            </Button>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          {memberData?.map((row, index) => (
-            <Card key={row._id} className="border-l-4 border-l-red-500">
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge variant="outline" className="text-xs">#{index + 1}</Badge>
-                    </div>
-                    <h4 className="font-semibold text-base text-gray-900">{row?.subUser?.subUserName}</h4>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold text-green-600">₹{row?.total.toLocaleString()}</p>
-                    <p className="text-xs text-gray-500">Total</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-blue-500" />
-                    <div>
-                      <p className="text-gray-600">હપ્તો</p>
-                      <p className="font-medium">₹{row?.installment.toLocaleString()}</p>
-                    </div>
-                  </div>
-
-                  {row?.amount > 0 && (
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-purple-500" />
-                      <div>
-                        <p className="text-gray-600">આ નો ઉ.</p>
-                        <p className="font-medium">₹{row?.amount.toLocaleString()}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {row?.interest > 0 && (
-                    <div className="flex items-center gap-2">
-                      <TrendingUp className="h-4 w-4 text-green-500" />
-                      <div>
-                        <p className="text-gray-600">બ્યાજ</p>
-                        <p className="font-medium">₹{row?.interest}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {row?.withdrawal > 0 && (
-                    <div className="flex items-center gap-2">
-                      <Minus className="h-4 w-4 text-red-500" />
-                      <div>
-                        <p className="text-gray-600">ઉપાડ જમા</p>
-                        <p className="font-medium">₹{row?.withdrawal.toLocaleString()}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {row?.fine > 0 && (
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4 text-orange-500" />
-                      <div>
-                        <p className="text-gray-600">દંડ</p>
-                        <p className="font-medium">₹{row?.fine}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {row?.newWithdrawal > 0 && (
-                    <div className="flex items-center gap-2">
-                      <Minus className="h-4 w-4 text-red-400" />
-                      <div>
-                        <p className="text-gray-600">નવો ઉપાડ</p>
-                        <p className="font-medium">₹{row?.newWithdrawal.toLocaleString()}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
 
       <div className="mt-8">
         <h3 className="text-lg font-semibold mb-4">Summary Calculations</h3>
@@ -895,7 +862,7 @@ export default function AnalyticsPage() {
                   <span className="font-medium">Total Interest ( કુલ વ્યાજ ):</span>
                   <span className="font-bold">₹{calculations.totalInterest.toLocaleString()}</span>
                 </div>
-                 <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                   <span className="font-medium">Total Withdrawals Deposit ( ઉપાડ જમા ):</span>
                   <span className="font-bold">₹{calculations.totalWithdrawals.toLocaleString()}</span>
                 </div>
@@ -919,18 +886,18 @@ export default function AnalyticsPage() {
                 </div>
               </div>
             </div>
-                <div className="flex justify-between items-center p-3 bg-red-100 rounded-lg border-2 border-red-200 mt-6">
-                  <span className="font-bold text-red-800">Mandal&apos;s cash ( મંડળની રોકડ ):</span>
-                  <span className="font-bold text-xl text-red-800">₹ {calculations.Mandalcash.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-green-100 rounded-lg border-2 border-green-200 mt-6">
-                  <span className="font-bold text-green-800">per person ( વ્યક્તિ દીઠ ):</span>
-                  <span className="font-bold text-xl text-green-800">₹ {calculations.perPerson.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-green-100 rounded-lg border-2 border-green-200 mt-6">
-                  <span className="font-bold text-green-800">Interest per person ( વ્યક્તિ દીઠ વ્યાજ):</span>
-                  <span className="font-bold text-xl text-green-800">₹ {calculations.interestPerPerson.toLocaleString()}</span>
-                </div>
+            <div className="flex justify-between items-center p-3 bg-red-100 rounded-lg border-2 border-red-200 mt-6">
+              <span className="font-bold text-red-800">Mandal&apos;s cash ( મંડળની રોકડ ):</span>
+              <span className="font-bold text-xl text-red-800">₹ {calculations.Mandalcash.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between items-center p-3 bg-green-100 rounded-lg border-2 border-green-200 mt-6">
+              <span className="font-bold text-green-800">per person ( વ્યક્તિ દીઠ ):</span>
+              <span className="font-bold text-xl text-green-800">₹ {calculations.perPerson.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between items-center p-3 bg-green-100 rounded-lg border-2 border-green-200 mt-6">
+              <span className="font-bold text-green-800">Interest per person ( વ્યક્તિ દીઠ વ્યાજ):</span>
+              <span className="font-bold text-xl text-green-800">₹ {calculations.interestPerPerson.toLocaleString()}</span>
+            </div>
           </CardContent>
         </Card>
       </div>
