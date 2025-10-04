@@ -1,17 +1,18 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Eye, Edit } from "lucide-react";
+import { Eye, Edit, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface DesktopTableViewProps {
   mandals: Mandal[];
   onView: (mandal: Mandal) => void;
   onEdit: (mandal: Mandal) => void;
+  onDelete: (mandal: Mandal) => void;
 }
 
 export interface Mandal {
-  id: number;
+  id: string;
   nameEn: string;
   nameGu: string;
   adminUsername: string;
@@ -34,7 +35,7 @@ export const StatusBadge = ({ status }: StatusBadgeProps) => (
   </Badge>
 );
 
-export const DesktopTableView = ({ mandals, onView, onEdit }: DesktopTableViewProps) => (
+export const DesktopTableView = ({ mandals, onView, onEdit, onDelete }: DesktopTableViewProps) => (
   <Card className="hidden md:block">
     <CardHeader>
       <CardTitle>All Mandals ({mandals.length})</CardTitle>
@@ -47,7 +48,7 @@ export const DesktopTableView = ({ mandals, onView, onEdit }: DesktopTableViewPr
               <TableHead className="font-semibold text-red-800">Sr. No.</TableHead>
               <TableHead className="font-semibold text-red-800">Mandal Name (English)</TableHead>
               <TableHead className="font-semibold text-red-800">મંડળ નામ (ગુજરાતી)</TableHead>
-              <TableHead className="font-semibold text-red-800">Admin Username</TableHead>
+              <TableHead className="font-semibold text-red-800">Mandal Username</TableHead>
               <TableHead className="font-semibold text-red-800">Established Date</TableHead>
               <TableHead className="font-semibold text-red-800">Status</TableHead>
               <TableHead className="font-semibold text-red-800">Total Members</TableHead>
@@ -61,10 +62,9 @@ export const DesktopTableView = ({ mandals, onView, onEdit }: DesktopTableViewPr
                 <TableCell className="font-medium">{mandal.nameEn}</TableCell>
                 <TableCell className="font-medium">{mandal.nameGu}</TableCell>
                 <TableCell>{mandal.adminUsername}</TableCell>
-                {/* <TableCell>{new Date(mandal.establishedDate).toLocaleDateString()}</TableCell> */}
                 <TableCell>
-  {new Intl.DateTimeFormat("en-GB").format(new Date(mandal.establishedDate))}
-</TableCell>
+                  {new Intl.DateTimeFormat("en-GB").format(new Date(mandal.establishedDate))}
+                </TableCell>
                 <TableCell>
                   <StatusBadge status={mandal.status} />
                 </TableCell>
@@ -78,6 +78,10 @@ export const DesktopTableView = ({ mandals, onView, onEdit }: DesktopTableViewPr
                     <Button variant="outline" size="sm" onClick={() => onEdit(mandal)}>
                       <Edit className="h-4 w-4 mr-1" />
                       Edit
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => onDelete(mandal)}>
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      Delete
                     </Button>
                   </div>
                 </TableCell>

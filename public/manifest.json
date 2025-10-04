@@ -1,6 +1,6 @@
 {
-  "name": "Your App Name",
-  "short_name": "Short Name",
+  "name": "Mandal App",
+  "short_name": "MA",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

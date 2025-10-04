@@ -16,7 +16,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-white">
       <DashboardHeader onMobileMenuToggle={toggleMobileSidebar} />
       <div className="flex">
         <DashboardSidebar isOpen={isMobileSidebarOpen} onClose={closeMobileSidebar} />

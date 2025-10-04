@@ -4,6 +4,9 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useRouter, usePathname } from "next/navigation"
+import { MdOutlineDashboardCustomize } from "react-icons/md";
+import { HiOutlineUserGroup } from "react-icons/hi";
+import { BsBarChart } from "react-icons/bs";
 
 interface MenuItem {
   title: string
@@ -16,79 +19,51 @@ const menuItems: MenuItem[] = [
   // admin menu
   {
     title: "Dashboard",
-    icon: (
-      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"
-        />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5a2 2 0 012-2h4a2 2 0 012 2v6H8V5z" />
-      </svg>
-    ),
+    icon: <MdOutlineDashboardCustomize />,
     href: "/admin/dashboard",
     roles: ["admin"],
   },
   {
     title: "Create Mandal",
-    icon: (
-      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-        />
-      </svg>
-    ),
+    icon: <HiOutlineUserGroup />,
     href: "/admin/create-mandal",
     roles: ["admin"],
   },
-    {
-    title: "Mandal List",
-    icon: (
-      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
-        />
-      </svg>
-    ),
-    href: "/admin/mandal-list",
-    roles: ["admin"],
-  },
+  //   {
+  //   title: "Mandal List",
+  //   icon: (
+  //     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  //       <path
+  //         strokeLinecap="round"
+  //         strokeLinejoin="round"
+  //         strokeWidth={2}
+  //         d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
+  //       />
+  //     </svg>
+  //   ),
+  //   href: "/admin/mandal-list",
+  //   roles: ["admin"],
+  // },
   //  mandal menu
-  {
-    title: "Dashboard",
-    icon: (
-      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"
-        />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5a2 2 0 012-2h4a2 2 0 012 2v6H8V5z" />
-      </svg>
-    ),
-    href: "/mandal/dashboard",
-    roles: ["mandal"],
-  },
+  // {
+  //   title: "Dashboard",
+  //   icon: (
+  //     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  //       <path
+  //         strokeLinecap="round"
+  //         strokeLinejoin="round"
+  //         strokeWidth={2}
+  //         d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"
+  //       />
+  //       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5a2 2 0 012-2h4a2 2 0 012 2v6H8V5z" />
+  //     </svg>
+  //   ),
+  //   href: "/mandal/dashboard",
+  //   roles: ["mandal"],
+  // },
   {
     title: "Monthly Ledger",
-    icon: (
-      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-        />
-      </svg>
-    ),
+    icon:<BsBarChart />,
     href: "/mandal/analytics",
     roles: ["mandal"],
   },
@@ -105,15 +80,20 @@ export function DashboardSidebar({ isOpen, onClose }: DashboardSidebarProps) {
   const router = useRouter()
   const pathname = usePathname()
 
-  // // Filter menu items based on user role
-  // const filteredMenuItems = menuItems.filter(item => 
-  //    item.roles.includes("admin")
-  // )
-
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const storedRole = sessionStorage.getItem("role")
-      setRole(storedRole)
+      let token = localStorage.getItem("token");
+      if (!token) {
+        token = sessionStorage.getItem("token");
+      }
+      if (token) {
+        try {
+          const user = JSON.parse(atob(token.split(".")[1]));
+          setRole(user.role);
+        } catch (error) {
+          console.error("Error parsing token:", error);
+        }
+      }
     }
   }, [])
 

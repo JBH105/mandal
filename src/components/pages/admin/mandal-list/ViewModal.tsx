@@ -11,7 +11,7 @@ interface ViewModalProps {
 }
 
 export interface Mandal {
-  id: number;
+  id: string;
   nameEn: string;
   nameGu: string;
   adminUsername: string;
@@ -52,7 +52,7 @@ export const ViewModal = ({ mandal, open, onOpenChange, onEdit }: ViewModalProps
               <p className="text-lg font-semibold">{mandal.nameGu}</p>
             </div>
             <div className="space-y-2">
-              <Label className="text-sm font-medium text-gray-600">Admin Username</Label>
+              <Label className="text-sm font-medium text-gray-600">Mandal Username</Label>
               <p className="font-medium">{mandal.adminUsername}</p>
             </div>
             <div className="space-y-2">

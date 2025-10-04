@@ -1,10 +1,10 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar, Users, Building, Eye, Edit } from "lucide-react";
+import { Calendar, Users, Building, Eye, Edit, Trash2 } from "lucide-react";
 
 export interface Mandal {
-  id: number;
+  id: string;
   nameEn: string;
   nameGu: string;
   adminUsername: string;
@@ -19,6 +19,7 @@ interface MandalCardProps {
   index: number;
   onView: (mandal: Mandal) => void;
   onEdit: (mandal: Mandal) => void;
+  onDelete: (mandal: Mandal) => void;
 }
 
 interface StatusBadgeProps {
@@ -34,7 +35,7 @@ export const StatusBadge = ({ status }: StatusBadgeProps) => (
   </Badge>
 );
 
-export const MandalCard = ({ mandal, index, onView, onEdit }: MandalCardProps) => (
+export const MandalCard = ({ mandal, index, onView, onEdit, onDelete }: MandalCardProps) => (
   <Card className="border-l-4 border-l-red-500">
     <CardContent className="p-4">
       <div className="flex items-start justify-between mb-3">
@@ -59,8 +60,7 @@ export const MandalCard = ({ mandal, index, onView, onEdit }: MandalCardProps) =
         <div className="flex items-center gap-2 text-sm">
           <Calendar className="h-4 w-4 text-gray-500" />
           <span className="text-gray-600">Established:</span>
-          {/* <span className="font-medium">{new Date(mandal.establishedDate).toLocaleDateString()}</span> */}
-         <span className="font-medium">{new Intl.DateTimeFormat("en-GB").format(new Date(mandal.establishedDate))}</span>
+          <span className="font-medium">{new Intl.DateTimeFormat("en-GB").format(new Date(mandal.establishedDate))}</span>
         </div>
         <div className="flex items-center gap-2 text-sm">
           <Users className="h-4 w-4 text-gray-500" />
@@ -77,6 +77,10 @@ export const MandalCard = ({ mandal, index, onView, onEdit }: MandalCardProps) =
         <Button variant="outline" size="sm" className="flex-1 bg-transparent" onClick={() => onEdit(mandal)}>
           <Edit className="h-4 w-4 mr-1" />
           Edit
+        </Button>
+        <Button variant="outline" size="sm" className="flex-1 bg-transparent" onClick={() => onDelete(mandal)}>
+          <Trash2 className="h-4 w-4 mr-1" />
+          Delete
         </Button>
       </div>
     </CardContent>

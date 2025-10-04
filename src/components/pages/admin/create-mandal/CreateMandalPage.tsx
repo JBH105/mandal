@@ -1,71 +1,84 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Eye, EyeOff, Users, Shield, Calendar } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
-
-interface MandalFormData {
-  mandalName: string
-  mandalNameGujarati: string
-  description: string
-  adminName: string
-  adminEmail: string
-  adminPhone: string
-  adminPassword: string
-  confirmPassword: string
-  establishedDate: string
-  isActive: boolean
-}
+import { createMandal } from "@/auth/auth"
+import { showErrorToast, showSuccessToast } from "@/lib/toast"
+import { useMandalForm } from "@/hooks/useMandalForm"
 
 export default function CreateMandalPage() {
-  const [formData, setFormData] = useState<MandalFormData>({
-    mandalName: "",
-    mandalNameGujarati: "",
-    description: "",
-    adminName: "",
-    adminEmail: "",
-    adminPhone: "",
-    adminPassword: "",
-    confirmPassword: "",
-    establishedDate: "",
-    isActive: true,
-  })
-
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-
-  const handleInputChange = (field: keyof MandalFormData, value: string | boolean) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-  }
+  
+  const {
+    formData,
+    validationErrors,
+    handleInputChange,
+    handleBlur,
+    validateAllFields,
+    resetForm,
+    isFieldInvalid,
+  } = useMandalForm()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsSubmitting(true)
-
-    // Validate passwords match
-    if (formData.adminPassword !== formData.confirmPassword) {
-      alert("Passwords do not match!")
-      setIsSubmitting(false)
+    
+    if (!validateAllFields()) {
+      showErrorToast("Please fix validation errors before submitting")
       return
     }
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    if (formData.mandalUserPassword !== formData.confirmPassword) {
+      showErrorToast("Passwords do not match!")
+      return
+    }
 
-    console.log("Mandal created:", formData)
-    alert("મંડળ સફળતાપૂર્વક બનાવવામાં આવ્યું! (Mandal created successfully!)")
-    setIsSubmitting(false)
+    setIsSubmitting(true)
+
+    // Strip +91 from phone number for payload
+    const cleanedPhoneNumber = formData.mandalUserPhone.replace(/^\+91\s*/, '')
+
+    console.log("Payload being sent:", {
+      nameEn: formData.mandalName,
+      nameGu: formData.mandalNameGujarati,
+      userName: formData.mandalUserName,
+      phoneNumber: cleanedPhoneNumber,
+      password: formData.mandalUserPassword,
+      confirmPassword: formData.confirmPassword,
+      establishedDate: formData.establishedDate,
+      isActive: formData.isActive,
+    });
+
+    try {
+      await createMandal({
+        nameEn: formData.mandalName,
+        nameGu: formData.mandalNameGujarati,
+        userName: formData.mandalUserName,
+        phoneNumber: cleanedPhoneNumber,
+        password: formData.mandalUserPassword,
+        confirmPassword: formData.confirmPassword,
+        establishedDate: formData.establishedDate,
+        isActive: formData.isActive,
+      })
+
+      showSuccessToast("મંડળ સફળતાપૂર્વક બનાવવામાં આવ્યું! (Mandal created successfully!)")
+      resetForm()
+    } catch (error) {
+      console.error("Error creating mandal:", error)
+      showErrorToast("Failed to create mandal. Please try again.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -95,8 +108,12 @@ export default function CreateMandalPage() {
                   placeholder="Enter mandal name in English"
                   value={formData.mandalName}
                   onChange={(e) => handleInputChange("mandalName", e.target.value)}
-                  required
+                  onBlur={() => handleBlur("mandalName")}
+                  className={isFieldInvalid("mandalName") ? 'border-destructive focus-visible:ring-destructive' : ''}
                 />
+                {isFieldInvalid("mandalName") && (
+                  <p className="text-destructive text-sm mt-1">{validationErrors.mandalName}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="mandalNameGujarati">મંડળનું નામ (Gujarati)</Label>
@@ -105,19 +122,13 @@ export default function CreateMandalPage() {
                   placeholder="મંડળનું નામ ગુજરાતીમાં લખો"
                   value={formData.mandalNameGujarati}
                   onChange={(e) => handleInputChange("mandalNameGujarati", e.target.value)}
-                  required
+                  onBlur={() => handleBlur("mandalNameGujarati")}
+                  className={isFieldInvalid("mandalNameGujarati") ? 'border-destructive focus-visible:ring-destructive' : ''}
                 />
+                {isFieldInvalid("mandalNameGujarati") && (
+                  <p className="text-destructive text-sm mt-1">{validationErrors.mandalNameGujarati}</p>
+                )}
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                placeholder="Enter mandal description and purpose"
-                value={formData.description}
-                onChange={(e) => handleInputChange("description", e.target.value)}
-                rows={3}
-              />
             </div>
           </CardContent>
         </Card>
@@ -127,56 +138,58 @@ export default function CreateMandalPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Shield className="h-5 w-5" />
-              Admin Credentials
+              Mandal User Credentials
             </CardTitle>
-            <CardDescription>એડમિન લોગિન માટેની માહિતી (Admin login information)</CardDescription>
+            <CardDescription>મંડળ યુઝર લોગિન માટેની માહિતી (Mandal User login information)</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="adminName">Admin Name</Label>
+                <Label htmlFor="mandalUserName">Mandal User Name</Label>
                 <Input
-                  id="adminName"
+                  id="mandalUserName"
                   placeholder="Enter admin full name"
-                  value={formData.adminName}
-                  onChange={(e) => handleInputChange("adminName", e.target.value)}
-                  required
+                  value={formData.mandalUserName}
+                  onChange={(e) => handleInputChange("mandalUserName", e.target.value)}
+                  onBlur={() => handleBlur("mandalUserName")}
+                  className={isFieldInvalid("mandalUserName") ? 'border-destructive focus-visible:ring-destructive' : ''}
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="adminEmail">Admin Email</Label>
-                <Input
-                  id="adminEmail"
-                  type="email"
-                  placeholder="admin@example.com"
-                  value={formData.adminEmail}
-                  onChange={(e) => handleInputChange("adminEmail", e.target.value)}
-                  required
-                />
+                {isFieldInvalid("mandalUserName") && (
+                  <p className="text-destructive text-sm mt-1">{validationErrors.mandalUserName}</p>
+                )}
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="adminPhone">Admin Phone</Label>
-              <Input
-                id="adminPhone"
-                type="tel"
-                placeholder="+91 98765 43210"
-                value={formData.adminPhone}
-                onChange={(e) => handleInputChange("adminPhone", e.target.value)}
-                required
-              />
+              <Label htmlFor="mandalUserPhone">User Phone</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">+91</span>
+                <Input
+                  id="mandalUserPhone"
+                  type="tel"
+                  placeholder="9876543210"
+                  value={formData.mandalUserPhone.replace(/^\+91\s*/, '')}
+                  onChange={(e) => handleInputChange("mandalUserPhone", `+91 ${e.target.value.replace(/[^0-9]/g, '')}`)}
+                  onBlur={() => handleBlur("mandalUserPhone")}
+                  maxLength={10}
+                  className={`pl-12 ${isFieldInvalid("mandalUserPhone") ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                />
+              </div>
+              {isFieldInvalid("mandalUserPhone") && (
+                <p className="text-destructive text-sm mt-1">{validationErrors.mandalUserPhone}</p>
+              )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="adminPassword">Password</Label>
+                <Label htmlFor="mandalUserPassword">Password</Label>
                 <div className="relative">
                   <Input
-                    id="adminPassword"
+                    id="mandalUserPassword"
                     type={showPassword ? "text" : "password"}
                     placeholder="Enter strong password"
-                    value={formData.adminPassword}
-                    onChange={(e) => handleInputChange("adminPassword", e.target.value)}
-                    required
+                    value={formData.mandalUserPassword}
+                    onChange={(e) => handleInputChange("mandalUserPassword", e.target.value)}
+                    onBlur={() => handleBlur("mandalUserPassword")}
+                    className={isFieldInvalid("mandalUserPassword") ? 'border-destructive focus-visible:ring-destructive' : ''}
                   />
                   <Button
                     type="button"
@@ -188,6 +201,9 @@ export default function CreateMandalPage() {
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
                 </div>
+                {isFieldInvalid("mandalUserPassword") && (
+                  <p className="text-destructive text-sm mt-1">{validationErrors.mandalUserPassword}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Confirm Password</Label>
@@ -198,7 +214,8 @@ export default function CreateMandalPage() {
                     placeholder="Confirm password"
                     value={formData.confirmPassword}
                     onChange={(e) => handleInputChange("confirmPassword", e.target.value)}
-                    required
+                    onBlur={() => handleBlur("confirmPassword")}
+                    className={isFieldInvalid("confirmPassword") ? 'border-destructive focus-visible:ring-destructive' : ''}
                   />
                   <Button
                     type="button"
@@ -210,6 +227,9 @@ export default function CreateMandalPage() {
                     {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
                 </div>
+                {isFieldInvalid("confirmPassword") && (
+                  <p className="text-destructive text-sm mt-1">{validationErrors.confirmPassword}</p>
+                )}
               </div>
             </div>
           </CardContent>
@@ -232,8 +252,12 @@ export default function CreateMandalPage() {
                 type="date"
                 value={formData.establishedDate}
                 onChange={(e) => handleInputChange("establishedDate", e.target.value)}
-                required
+                onBlur={() => handleBlur("establishedDate")}
+                className={isFieldInvalid("establishedDate") ? 'border-destructive focus-visible:ring-destructive' : ''}
               />
+              {isFieldInvalid("establishedDate") && (
+                <p className="text-destructive text-sm mt-1">{validationErrors.establishedDate}</p>
+              )}
             </div>
             <Separator />
             <div className="flex items-center justify-between">
@@ -269,7 +293,7 @@ export default function CreateMandalPage() {
               </div>
               <div className="space-y-2">
                 <p className="text-sm font-medium">Admin:</p>
-                <p className="text-sm text-muted-foreground">{formData.adminName || "Not specified"}</p>
+                <p className="text-sm text-muted-foreground">{formData.mandalUserName || "Not specified"}</p>
               </div>
               <div className="space-y-2">
                 <p className="text-sm font-medium">Established Date:</p>
@@ -287,7 +311,7 @@ export default function CreateMandalPage() {
 
         {/* Submit Button */}
         <div className="flex justify-end space-x-4">
-          <Button type="button" variant="outline">
+          <Button type="button" variant="outline" onClick={resetForm}>
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting}>

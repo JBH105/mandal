@@ -19,7 +19,7 @@ export const Filters = ({
   <div className="flex flex-col sm:flex-row gap-4 mb-6">
     <div className="flex-1">
       <Input
-        placeholder="Search mandals by name or admin username..."
+        placeholder="Search mandals by name or mandal username..."
         value={searchTerm}
         onChange={(e) => onSearchChange(e.target.value)}
         className="max-w-sm"
