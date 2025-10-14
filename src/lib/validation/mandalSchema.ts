@@ -39,6 +39,9 @@ export const validateField = (field: keyof ValidationErrors, value: string, form
     case 'mandalUserPassword':
       if (!value) return "Password is required"
       if (value.length < 6) return "Password must be at least 6 characters"
+      if (!/[A-Z]/.test(value)) return "Password must contain at least one uppercase letter"
+      if (!/[a-z]/.test(value)) return "Password must contain at least one lowercase letter"
+      if (!/\d/.test(value)) return "Password must contain at least one number"
       return ""
     
     case 'confirmPassword':

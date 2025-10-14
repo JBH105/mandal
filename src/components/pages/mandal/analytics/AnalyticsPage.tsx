@@ -17,6 +17,7 @@ import { HiOutlineUserGroup } from "react-icons/hi";
 import { BiDollar } from "react-icons/bi";
 import { HiArrowTrendingUp, HiArrowTrendingDown } from "react-icons/hi2";
 import { validateNewMemberForm, cleanPhoneNumberForPayload, formatPhoneNumber, ValidationErrors } from "./validation";
+import { AxiosError } from "axios";
 
 interface Calculations {
   totalInstallments: number;
@@ -105,21 +106,23 @@ export default function AnalyticsPage() {
     fetchMandal();
   }, []);
 
+  // Function to refresh sub-users
+  const refreshSubUsers = async () => {
+    if (!mandalId) return;
+    try {
+      const users = await getMandalSubUsersApi();
+      const filteredUsers = users.filter((user: SubUser) => user.mandal === mandalId);
+      setSubUsers(filteredUsers);
+    } catch (error) {
+      console.log("🚀 ~ refreshSubUsers ~ error:", error);
+      showErrorToast("Error fetching sub-users:");
+      setSubUsers([]);
+    }
+  };
+
   // Fetch sub-users filtered by mandal ID
   useEffect(() => {
-    const fetchSubUsers = async () => {
-      if (!mandalId) return;
-      try {
-        const users = await getMandalSubUsersApi();
-        const filteredUsers = users.filter((user: SubUser) => user.mandal === mandalId);
-        setSubUsers(filteredUsers);
-      } catch (error) {
-        console.log("🚀 ~ fetchSubUsers ~ error:", error);
-        showErrorToast("Error fetching sub-users:");
-        setSubUsers([]);
-      }
-    };
-    fetchSubUsers();
+    refreshSubUsers();
   }, [mandalId]);
 
   // Fetch all months on component mount
@@ -221,21 +224,20 @@ export default function AnalyticsPage() {
       });
 
       showSuccessToast(response.message || "Sub-user created successfully");
-      if (response.mandal === mandalId) {
-        setSubUsers([...subUsers, { 
-          _id: response._id, 
-          mandal: response.mandal, 
-          subUserName: newMemberData.subUserName,
-          phoneNumber: cleanPhoneNumberForPayload(newMemberData.phoneNumber) 
-        }]);
-      }
+
+      // Refresh the sub-users list to ensure the dropdown is updated
+      await refreshSubUsers();
+
       setNewMemberData({ subUserName: "", phoneNumber: "" });
       setErrors({});
       setTouched({ subUserName: false, phoneNumber: false });
       setIsAddMemberDialogOpen(false);
-    } catch (error) {
-      console.log("🚀 ~ handleAddMember ~ error:", error);
-      showErrorToast("Failed to create sub-user");
+    } catch (error: unknown) {
+      if (error instanceof AxiosError && error.response?.data?.error === "Phone number already in use") {
+        showErrorToast("Phone number already in use");
+      } else {
+        showErrorToast("Failed to create sub-user");
+      }
     }
   };
 
@@ -309,11 +311,11 @@ export default function AnalyticsPage() {
           subUserId: subUser._id,
           month: newMonth,
           installment: prev ? prev.installment : 0,
-          amount: prev ? prev.amount : 0,
-          interest: prev ? prev.interest : 0,
-          fine: prev ? prev.fine : 0,
-          withdrawal: prev ? prev.withdrawal : 0,
-          newWithdrawal: prev ? prev.newWithdrawal : 0,
+          amount: prev ? prev.amount + prev.newWithdrawal - prev.withdrawal : 0,
+          interest: 0,
+          fine: 0,
+          withdrawal: 0,
+          newWithdrawal: 0,
         };
         await createMemberDataApi(data);
       }
@@ -402,7 +404,7 @@ export default function AnalyticsPage() {
               <DialogTrigger asChild>
                 <Button className="w-auto sm:w-auto" disabled={!selectedMonth}>
                   <Plus className="h-4 w-4" />
-                  Update Member Data
+                  Update Member
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-[90vw] p-4 sm:max-w-2xl sm:p-6">
@@ -442,21 +444,21 @@ export default function AnalyticsPage() {
                           });
                         }
                       }}
-                      disabled={subUsers?.length === 0}
+                      disabled={!subUsers || subUsers.length === 0}
                     >
                       <SelectTrigger>
                         <SelectValue
                           placeholder={
-                            subUsers?.length === 0
+                            !subUsers || subUsers.length === 0
                               ? "No member added"
                               : "Select member"
                           }
                         />
                       </SelectTrigger>
                       <SelectContent>
-                        {subUsers?.map((user) => (
-                          <SelectItem key={user?._id} value={user?._id}>
-                            {user?.subUserName}
+                        {subUsers && subUsers.map((user) => (
+                          <SelectItem key={user._id} value={user._id}>
+                            {user.subUserName}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -554,7 +556,7 @@ export default function AnalyticsPage() {
                     type="button"
                     onClick={handleAddData}
                     className="text-sm sm:text-base"
-                    disabled={subUsers?.length === 0}
+                    disabled={!subUsers || subUsers.length === 0}
                   >
                     Add Data
                   </Button>

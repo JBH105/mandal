@@ -5,7 +5,6 @@ import { PageHeader } from "@/components/ui/page-header";
 import { SummaryCards } from "./SummaryCards";
 import { Filters, StatusFilter } from "./Filters";
 import { DesktopTableView } from "./DesktopTableView";
-import { MobileCardView } from "./MobileCardView";
 import { ViewModal } from "./ViewModal";
 import { EditModal } from "./EditModal";
 import { DeleteModal } from "./DeleteModal";
@@ -157,13 +156,6 @@ export default function MandalListPage() {
       />
 
       <DesktopTableView 
-        mandals={filteredMandals} 
-        onView={handleView} 
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-      />
-      
-      <MobileCardView 
         mandals={filteredMandals} 
         onView={handleView} 
         onEdit={handleEdit}

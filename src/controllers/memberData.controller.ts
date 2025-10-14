@@ -181,12 +181,12 @@ export async function initializeMonthData(request: AuthenticatedRequest) {
         newData = {
           ...newData,
           installment: prev.installment,
-          amount: prev.amount,
-          interest: prev.interest,
-          fine: prev.fine,
-          withdrawal: prev.withdrawal,
-          newWithdrawal: prev.newWithdrawal,
-          total: prev.total,
+          amount: prev.amount + prev.newWithdrawal,
+          interest: 0,
+          fine: 0,
+          withdrawal: 0,
+          newWithdrawal: 0,
+          total: prev.installment + 0,
         };
       }
 
