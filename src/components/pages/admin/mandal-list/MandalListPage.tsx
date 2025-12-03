@@ -9,7 +9,7 @@ import { ViewModal } from "./ViewModal";
 import { EditModal } from "./EditModal";
 import { DeleteModal } from "./DeleteModal";
 import { getMandals, getMandalSubUsersApi, deleteMandal } from "@/auth/auth";
-import { showErrorToast, showSuccessToast } from "@/lib/toast";
+import { showErrorToast, showSuccessToast } from "@/middleware/lib/toast";
 
 export interface Mandal {
   id: string;

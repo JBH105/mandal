@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator"
 import { Eye, EyeOff, Users, Shield, Calendar } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
 import { createMandal } from "@/auth/auth"
-import { showErrorToast, showSuccessToast } from "@/lib/toast"
+import { showErrorToast, showSuccessToast } from "@/middleware/lib/toast"
 import { useMandalForm } from "@/hooks/useMandalForm"
 
 export default function CreateMandalPage() {

@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useState, useEffect } from "react"
 import { updateMandal } from "@/auth/auth"
-import { showErrorToast, showSuccessToast } from "@/lib/toast"
+import { showErrorToast, showSuccessToast } from "@/middleware/lib/toast"
 
 export interface Mandal {
   id: string;

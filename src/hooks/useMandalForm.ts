@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { MandalFormData, ValidationErrors, validateField, validateForm } from "@/lib/validation/mandalSchema"
+import { MandalFormData, ValidationErrors, validateField, validateForm } from "@/middleware/lib/validation/mandalSchema"
 
 export const useMandalForm = (initialData?: Partial<MandalFormData>) => {
   const [formData, setFormData] = useState<MandalFormData>({

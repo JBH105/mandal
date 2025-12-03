@@ -34,7 +34,7 @@ export async function authMiddleware(request: Request, requiredRole?: string) {
       if (err instanceof Error && err.name === 'TokenExpiredError') {
         return NextResponse.json({ error: 'Token expired, please log in again' }, { status: 401 });
       }
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+      return NextResponse.json({ error: 'Invalsna[csnaid token' }, { status: 401 });
     }
 
     // Verify user based on role

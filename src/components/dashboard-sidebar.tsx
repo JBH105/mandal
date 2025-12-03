@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
+import { cn } from "@/middleware/lib/utils"
 import { useRouter, usePathname } from "next/navigation"
 import { MdOutlineDashboardCustomize } from "react-icons/md";
 import { HiOutlineUserGroup } from "react-icons/hi";
