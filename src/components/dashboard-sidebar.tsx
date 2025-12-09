@@ -6,7 +6,7 @@ import { cn } from "@/middleware/lib/utils"
 import { useRouter, usePathname } from "next/navigation"
 import { MdOutlineDashboardCustomize } from "react-icons/md";
 import { HiOutlineUserGroup } from "react-icons/hi";
-import { BsBarChart } from "react-icons/bs";
+import { BsBarChart, BsCalendar2Check } from "react-icons/bs";
 
 interface MenuItem {
   title: string
@@ -65,6 +65,12 @@ const menuItems: MenuItem[] = [
     title: "Monthly Ledger",
     icon:<BsBarChart />,
     href: "/mandal/analytics",
+    roles: ["mandal"],
+  },
+  {
+    title: "Annual Record",
+    icon: <BsCalendar2Check />,
+    href: "/mandal/annual-record",
     roles: ["mandal"],
   },
 ]

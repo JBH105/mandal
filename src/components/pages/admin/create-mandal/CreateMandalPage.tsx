@@ -14,11 +14,13 @@ import { PageHeader } from "@/components/ui/page-header"
 import { createMandal } from "@/auth/auth"
 import { showErrorToast, showSuccessToast } from "@/middleware/lib/toast"
 import { useMandalForm } from "@/hooks/useMandalForm"
+import { useRouter } from "next/navigation"
 
 export default function CreateMandalPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const router = useRouter()
   
   const {
     formData,
@@ -72,7 +74,12 @@ export default function CreateMandalPage() {
       })
 
       showSuccessToast("મંડળ સફળતાપૂર્વક બનાવવામાં આવ્યું! (Mandal created successfully!)")
-      resetForm()
+      
+      // Wait 1 second to show the success message, then redirect
+      setTimeout(() => {
+        router.push("/admin/dashboard")
+      }, 1000)
+      
     } catch (error) {
       console.error("Error creating mandal:", error)
       showErrorToast("Failed to create mandal. Please try again.")

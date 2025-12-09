@@ -181,7 +181,7 @@ export function OverdueInfo({ memberId, currentMonth, memberName, currentInstall
               </p>
               <div className="max-h-60 overflow-y-auto">
                 <ul className="space-y-2">
-                  {overdueMonths.map((month, index) => (
+                  {overdueMonths.map((month) => (
                     <li key={month} className="flex justify-between items-center p-2 bg-red-50 rounded border border-red-100">
                       <span className="font-medium">{formatMonth(month)}</span>
                       <Badge variant="destructive" className="text-xs">

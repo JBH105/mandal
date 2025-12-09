@@ -209,7 +209,6 @@ export async function initializeMonthData(request: AuthenticatedRequest) {
 
 export async function getAllMonths(request: AuthenticatedRequest) {
   try {
-    // Apply auth middleware (mandal role required)
     const authResult = await authMiddleware(request, 'mandal');
     if (authResult) return authResult;
 
@@ -221,11 +220,22 @@ export async function getAllMonths(request: AuthenticatedRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const months = await MemberData.distinct('month', { mandal: mandal._id });
+    let months = await MemberData.distinct("month", { mandal: mandal._id });
 
-    return NextResponse.json(months.sort((a, b) => b.localeCompare(a)), { status: 200 });
-  } catch (error: unknown) {
-    console.log("🚀 ~ getAllMonths ~ error:", error)
+    // Normalize months → always YYYY-MM
+    const normalize = (m: string) => {
+      const [y, mo] = m.split("-");
+      return `${y}-${mo.padStart(2, "0")}`;
+    };
+
+    months = months.map(normalize);
+
+    // Sort newest first
+    months.sort((a, b) => b.localeCompare(a));
+
+    return NextResponse.json(months, { status: 200 });
+  } catch (error) {
+    console.log("🚀 ~ getAllMonths ~ error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

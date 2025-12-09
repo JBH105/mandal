@@ -1,3 +1,4 @@
+// src/components/pages/mandal/analytics/AnalyticsPage.tsx
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -31,6 +32,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, Calendar } from "lucide-react";
+import { HiOutlineUserGroup } from "react-icons/hi";
+import { BiDollar } from "react-icons/bi";
+import { HiArrowTrendingUp, HiArrowTrendingDown } from "react-icons/hi2";
+
 import {
   getMandals,
   getMandalSubUsersApi,
@@ -38,12 +43,13 @@ import {
   createMemberDataApi,
   getMemberDataApi,
   getAllMonthsApi,
+  initializeMonthDataApi,
   MemberData,
+  SubUser,
+  updateMandalInstallmentApi,
 } from "@/auth/auth";
+
 import { showErrorToast, showSuccessToast } from "@/middleware/lib/toast";
-import { HiOutlineUserGroup } from "react-icons/hi";
-import { BiDollar } from "react-icons/bi";
-import { HiArrowTrendingUp, HiArrowTrendingDown } from "react-icons/hi2";
 import {
   validateNewMemberForm,
   cleanPhoneNumberForPayload,
@@ -51,24 +57,23 @@ import {
   ValidationErrors,
 } from "./validation";
 import { AxiosError } from "axios";
-import { OverdueInfo } from "@/components/ui/overdue-info";
 import { SkeletonCard, SkeletonTable, Loader } from "@/components/ui/loader";
 
-interface Calculations {
-  totalInstallments: number;
-  totalAmount: number;
-  totalInterest: number;
-  totalFines: number;
-  totalWithdrawals: number;
-  totalNewWithdrawals: number;
-  grandTotal: number;
-  totalMembers: number;
-  totalName: number;
-  bandSilak: number;
-  Mandalcash: number;
-  interestPerPerson: number;
-  perPerson: number;
-}
+// interface Calculations {
+//   totalInstallments: number;
+//   totalAmount: number;
+//   totalInterest: number;
+//   totalFines: number;
+//   totalWithdrawals: number;
+//   totalNewWithdrawals: number;
+//   grandTotal: number;
+//   totalMembers: number;
+//   totalName: number;
+//   bandSilak: number;
+//   Mandalcash: number;
+//   interestPerPerson: number;
+//   perPerson: number;
+// }
 
 interface FormData {
   subUserId: string;
@@ -85,23 +90,25 @@ export interface NewMemberForm {
   phoneNumber: string;
 }
 
-interface SubUser {
-  _id: string;
-  mandal: string;
-  subUserName: string;
-  phoneNumber: string;
-}
+const LOCAL_STORAGE_KEYS = {
+  MANUAL_UPDATE_STATUS: (mandalId: string) =>
+    `mandal_${mandalId}_manual_update_status`,
+  MONTH_SELECTED: (mandalId: string) => `mandal_${mandalId}_selected_month`,
+};
 
 export default function AnalyticsPage() {
   const [mandalName, setMandalName] = useState<string>("આઈ શ્રી ખોડિયાર");
   const [establishedDate, setEstablishedDate] = useState<string | null>(null);
   const [mandalId, setMandalId] = useState<string | null>(null);
+
   const [subUsers, setSubUsers] = useState<SubUser[]>([]);
   const [memberData, setMemberData] = useState<MemberData[]>([]);
   const [months, setMonths] = useState<string[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<string>("");
+
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState<boolean>(false);
+
   const [formData, setFormData] = useState<FormData>({
     subUserId: "",
     installment: "",
@@ -111,12 +118,17 @@ export default function AnalyticsPage() {
     withdrawal: "",
     newWithdrawal: "",
   });
+
+  const [selectedMemberName, setSelectedMemberName] = useState<string>("");
+
   const [isAddMemberDialogOpen, setIsAddMemberDialogOpen] =
     useState<boolean>(false);
+
   const [newMemberData, setNewMemberData] = useState<NewMemberForm>({
     subUserName: "",
     phoneNumber: "",
   });
+
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [touched, setTouched] = useState<{
     subUserName: boolean;
@@ -125,68 +137,140 @@ export default function AnalyticsPage() {
     subUserName: false,
     phoneNumber: false,
   });
+
   const [isDashboardLoading, setIsDashboardLoading] = useState(true);
   const [isAddingMonth, setIsAddingMonth] = useState<boolean>(false);
   const [isTableLoading, setIsTableLoading] = useState<boolean>(false);
   const [isTableDataLoading, setIsTableDataLoading] = useState<boolean>(false);
+
   const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
   const [isAddingMember, setIsAddingMember] = useState<boolean>(false);
   const [hasDataLoaded, setHasDataLoaded] = useState<boolean>(false);
 
-  // Reduce initial loading time
+  const [previousMonthData, setPreviousMonthData] = useState<MemberData[]>([]);
+
+  const [mandalMonthlyInstallment, setMandalMonthlyInstallment] =
+    useState<number>(0);
+
+  const [isHaptoDialogOpen, setIsHaptoDialogOpen] = useState<boolean>(false);
+  const [haptoValue, setHaptoValue] = useState<string>("");
+  const [haptoLabelValue, setHaptoLabelValue] = useState<string>("");
+
+  const [isInstallmentPaid, setIsInstallmentPaid] = useState<boolean>(true);
+  const [isHaptoSet, setIsHaptoSet] = useState<boolean>(false);
+
+  const [manualUpdateStatus, setManualUpdateStatus] = useState<
+    Record<string, boolean>
+  >(() => {
+    if (typeof window !== "undefined" && mandalId) {
+      const saved = localStorage.getItem(
+        LOCAL_STORAGE_KEYS.MANUAL_UPDATE_STATUS(mandalId)
+      );
+      return saved ? JSON.parse(saved) : {};
+    }
+    return {};
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && mandalId) {
+      localStorage.setItem(
+        LOCAL_STORAGE_KEYS.MANUAL_UPDATE_STATUS(mandalId),
+        JSON.stringify(manualUpdateStatus)
+      );
+    }
+  }, [manualUpdateStatus, mandalId]);
+
+  useEffect(() => {
+    if (selectedMonth && typeof window !== "undefined" && mandalId) {
+      localStorage.setItem(
+        LOCAL_STORAGE_KEYS.MONTH_SELECTED(mandalId),
+        selectedMonth
+      );
+    }
+  }, [selectedMonth, mandalId]);
+
   useEffect(() => {
     const timer = setTimeout(() => setIsDashboardLoading(false), 800);
     return () => clearTimeout(timer);
   }, []);
 
-  // Fetch initial data in parallel
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
         setIsDashboardLoading(true);
-        
-        // Fetch mandal data first
+
         const mandals = await getMandals();
         if (mandals.length > 0) {
-          setMandalName(mandals[0].nameGu);
-          setEstablishedDate(mandals[0].establishedDate);
-          const currentMandalId = mandals[0]._id;
+          const currentMandal = mandals[0];
+          setMandalName(currentMandal.nameGu);
+          setEstablishedDate(currentMandal.establishedDate);
+          const currentMandalId = currentMandal._id;
           setMandalId(currentMandalId);
 
-          // Fetch sub-users and months in parallel
+          const backendInstallment = (currentMandal ).setInstallment || 0;
+          setMandalMonthlyInstallment(backendInstallment);
+          setIsHaptoSet(backendInstallment > 0);
+          setHaptoLabelValue(
+            backendInstallment > 0 ? `Hapto: ₹${backendInstallment}` : ""
+          );
+
           const [users, allMonths] = await Promise.all([
             getMandalSubUsersApi(),
             getAllMonthsApi(),
           ]);
 
-          // Filter sub-users for current mandal
-          const filteredUsers = users.filter(
-            (user: SubUser) => user.mandal === currentMandalId
-          );
-          setSubUsers(filteredUsers);
+          setSubUsers(users);
 
-          // Handle months
-          if (Array.isArray(allMonths) && allMonths.length > 0) {
-            setMonths(allMonths);
-            const defaultMonth = allMonths[0];
+          // Check if mandal has any months
+          const validMonths = Array.isArray(allMonths) ? allMonths : [];
+
+          if (validMonths.length > 0) {
+            // Existing months found
+            const sortedMonths = [...validMonths].sort((a, b) => {
+              const dateA = new Date(a + "-01");
+              const dateB = new Date(b + "-01");
+              return dateB.getTime() - dateA.getTime();
+            });
+
+            setMonths(sortedMonths);
+
+            let defaultMonth = sortedMonths[0];
+            if (typeof window !== "undefined" && currentMandalId) {
+              const savedMonth = localStorage.getItem(
+                LOCAL_STORAGE_KEYS.MONTH_SELECTED(currentMandalId)
+              );
+              if (savedMonth && sortedMonths.includes(savedMonth)) {
+                defaultMonth = savedMonth;
+              }
+            }
+
             setSelectedMonth(defaultMonth);
 
-            // Fetch member data for selected month
             if (defaultMonth) {
               const data: MemberData[] = await getMemberDataApi(defaultMonth);
               setMemberData(data);
+
+              const currentMonthIndex = sortedMonths.indexOf(defaultMonth);
+              if (currentMonthIndex > 0) {
+                const previousMonth = sortedMonths[currentMonthIndex - 1];
+                const prevData: MemberData[] = await getMemberDataApi(
+                  previousMonth
+                );
+                setPreviousMonthData(prevData);
+              }
+
               setHasDataLoaded(true);
             }
           } else {
+            // No months exist - this is a new mandal
             setMonths([]);
+            setSelectedMonth("");
+            setMemberData([]);
             setHasDataLoaded(true);
-          }
 
-          // Check if this is a new mandal
-          const mandalIsNew = !Array.isArray(allMonths) || allMonths.length === 0;
-          if (mandalIsNew) {
+            // Show message to add first member
             showSuccessToast(
-              "Welcome to your new mandal! Start by adding members."
+              "Welcome to your new mandal! Start by adding your first member."
             );
           }
         } else {
@@ -201,19 +285,27 @@ export default function AnalyticsPage() {
         setIsDashboardLoading(false);
       }
     };
-    
+
     fetchInitialData();
   }, []);
 
-  // Fetch member data when selectedMonth changes (with debouncing)
   useEffect(() => {
     if (!selectedMonth) return;
-    
+
     const fetchMemberData = async () => {
       try {
         setIsTableDataLoading(true);
         const data: MemberData[] = await getMemberDataApi(selectedMonth);
         setMemberData(data);
+
+        const currentMonthIndex = months.indexOf(selectedMonth);
+        if (currentMonthIndex > 0 && months.length > 1) {
+          const previousMonth = months[currentMonthIndex - 1];
+          const prevData: MemberData[] = await getMemberDataApi(previousMonth);
+          setPreviousMonthData(prevData);
+        } else {
+          setPreviousMonthData([]);
+        }
       } catch (error) {
         console.log("🚀 ~ fetchMemberData ~ error:", error);
         showErrorToast("Error fetching member data:");
@@ -222,41 +314,46 @@ export default function AnalyticsPage() {
       }
     };
 
-    // Small delay to prevent too rapid API calls
     const timer = setTimeout(() => {
       fetchMemberData();
     }, 100);
 
     return () => clearTimeout(timer);
-  }, [selectedMonth]);
+  }, [selectedMonth, months]);
 
   const getCurrentMonth = () => {
     const now = new Date();
-    return `${now.getFullYear()}-${(now.getMonth() + 1)
-      .toString()
-      .padStart(2, "0")}`;
+    const year = now.getFullYear();
+    const month = (now.getMonth() + 1).toString().padStart(2, "0");
+    return `${year}-${month}`;
   };
 
-  // Memoize calculations for performance
   const calculations = useMemo(() => {
     const totalInstallments = memberData.reduce(
       (sum, row) => sum + row.installment,
       0
     );
     const totalAmount = memberData.reduce((sum, row) => sum + row.amount, 0);
-    const totalInterest = memberData.reduce((sum, row) => sum + row.interest, 0);
+    const totalInterest = memberData.reduce(
+      (sum, row) => sum + row.interest,
+      0
+    );
     const totalFines = memberData.reduce((sum, row) => sum + row.fine, 0);
-    const totalWithdrawals = memberData.reduce((sum, row) => sum + row.withdrawal, 0);
+    const totalWithdrawals = memberData.reduce(
+      (sum, row) => sum + row.withdrawal,
+      0
+    );
     const totalNewWithdrawals = memberData.reduce(
       (sum, row) => sum + row.newWithdrawal,
       0
     );
     const totalMembers = memberData.length;
-    
+
     const totalName = totalInstallments + totalInterest + totalWithdrawals;
     const bandSilak = totalName - totalNewWithdrawals;
     const Mandalcash = 0 + bandSilak;
-    const interestPerPerson = totalMembers > 0 ? totalInterest / totalMembers : 0;
+    const interestPerPerson =
+      totalMembers > 0 ? totalInterest / totalMembers : 0;
     const perPerson = totalMembers > 0 ? bandSilak / totalMembers : 0;
 
     return {
@@ -276,6 +373,53 @@ export default function AnalyticsPage() {
     };
   }, [memberData]);
 
+  const calculateCarriedForwardInstallment = (memberId: string) => {
+    if (!selectedMonth || !memberId) return 0;
+
+    const currentMonthIndex = months.indexOf(selectedMonth);
+    if (currentMonthIndex <= 0) return 0;
+
+    const previousData = previousMonthData.find(
+      (data) => data.subUser._id === memberId
+    );
+
+    if (previousData) {
+      return previousData.installment;
+    }
+
+    return 0;
+  };
+
+  const calculateCarriedForwardAmount = (memberId: string) => {
+    if (!selectedMonth || !memberId) return 0;
+
+    const currentMonthIndex = months.indexOf(selectedMonth);
+    if (currentMonthIndex <= 0) return 0;
+
+    const previousData = previousMonthData.find(
+      (data) => data.subUser._id === memberId
+    );
+
+    if (previousData) {
+      return (
+        previousData.amount +
+        previousData.newWithdrawal -
+        previousData.withdrawal
+      );
+    }
+
+    return 0;
+  };
+
+  const shouldCheckboxBeChecked = (memberId: string) => {
+    if (!selectedMonth) return false;
+
+    const isManuallyUpdated =
+      manualUpdateStatus[`${memberId}_${selectedMonth}`] || false;
+
+    return isManuallyUpdated;
+  };
+
   const getFilteredErrors = () => {
     const allErrors = validateNewMemberForm(newMemberData);
     const filtered: ValidationErrors = {};
@@ -286,6 +430,13 @@ export default function AnalyticsPage() {
       filtered.phoneNumber = allErrors.phoneNumber;
     }
     return filtered;
+  };
+
+  const getDisplayInstallmentValue = (row: MemberData): number => {
+    const carriedForwardInstallment = calculateCarriedForwardInstallment(
+      row.subUser._id
+    );
+    return carriedForwardInstallment + row.installment;
   };
 
   const handleAddMember = async () => {
@@ -322,81 +473,103 @@ export default function AnalyticsPage() {
         return;
       }
 
-      const response = await createMandalSubUserApi({
+      // 1) Create subuser
+      await createMandalSubUserApi({
         subUserName: newMemberData.subUserName,
         phoneNumber: cleanPhoneNumber,
       });
 
       showSuccessToast("Member created successfully!");
 
-      // Refresh sub-users
+      // 2) Refresh subUsers list
       const users = await getMandalSubUsersApi();
-      const filteredUsers = users.filter(
-        (user: SubUser) => user.mandal === mandalId
-      );
-      setSubUsers(filteredUsers);
+      setSubUsers(users);
 
-      const newMember = filteredUsers.find(
-        (user: SubUser) =>
-          user.subUserName === newMemberData.subUserName &&
-          user.phoneNumber === cleanPhoneNumber
-      );
+      // 3) Check if we need to create the first month based on established date
+      let allMonths = await getAllMonthsApi();
+      let validMonths = Array.isArray(allMonths) ? allMonths : [];
 
-      if (newMember) {
+      // If no months exist, create the first month based on established date
+      if (validMonths.length === 0 && establishedDate) {
         try {
-          const allMonths = await getAllMonthsApi();
-          const validMonths = Array.isArray(allMonths) ? allMonths : [];
+          // Extract YYYY-MM from established date
+          const establishedYear = new Date(establishedDate).getFullYear();
+          const establishedMonth = (new Date(establishedDate).getMonth() + 1)
+            .toString()
+            .padStart(2, "0");
+          const firstMonth = `${establishedYear}-${establishedMonth}`;
 
-          let targetMonth = selectedMonth;
+          // Initialize the first month
+          await initializeMonthDataApi(firstMonth);
 
-          if (validMonths.length === 0) {
-            targetMonth = getCurrentMonth();
-            const memberDataPayload = {
-              subUserId: newMember._id,
-              month: targetMonth,
-              installment: 0,
-              amount: 0,
-              interest: 0,
-              fine: 0,
-              withdrawal: 0,
-              newWithdrawal: 0,
-            };
-            await createMemberDataApi(memberDataPayload);
-            setMonths([targetMonth]);
-            setSelectedMonth(targetMonth);
-            const updatedData = await getMemberDataApi(targetMonth);
-            setMemberData(updatedData);
-          } else {
-            const sortedMonths = validMonths.sort().reverse();
-            const currentMonthIndex = sortedMonths.indexOf(selectedMonth);
-            if (currentMonthIndex !== -1) {
-              const monthsToCreate = sortedMonths.slice(0, currentMonthIndex + 1);
-              for (const month of monthsToCreate) {
-                const memberDataPayload = {
-                  subUserId: newMember._id,
-                  month: month,
-                  installment: 0,
-                  amount: 0,
-                  interest: 0,
-                  fine: 0,
-                  withdrawal: 0,
-                  newWithdrawal: 0,
-                };
-                await createMemberDataApi(memberDataPayload);
-              }
-            }
-            const updatedData = await getMemberDataApi(targetMonth);
-            setMemberData(updatedData);
-          }
-        } catch (dataError) {
-          console.error("Error creating member data:", dataError);
-          showErrorToast("Member created but failed to add to month data");
+          // Refresh months list
+          allMonths = await getAllMonthsApi();
+          validMonths = Array.isArray(allMonths) ? allMonths : [];
+
+          // Sort months
+          const sortedMonths = [...validMonths].sort((a, b) => {
+            const dateA = new Date(a + "-01");
+            const dateB = new Date(b + "-01");
+            return dateB.getTime() - dateA.getTime();
+          });
+
+          setMonths(sortedMonths);
+          setSelectedMonth(firstMonth);
+
+          // Fetch data for the first month
+          const updatedData = await getMemberDataApi(firstMonth);
+          setMemberData(updatedData);
+
+          showSuccessToast(
+            `First month ${firstMonth} created based on mandal's established date`
+          );
+        } catch (monthError) {
+          console.error("Error creating first month:", monthError);
+          showErrorToast("Failed to create initial month");
         }
+      } else if (validMonths.length > 0) {
+        // For existing months, add the new member to all months
+        const initPromises = validMonths.map(async (month) => {
+          if (!/^\d{4}-\d{2}$/.test(month)) {
+            console.warn(`Invalid month format: ${month}`);
+            return;
+          }
+          try {
+            await initializeMonthDataApi(month);
+          } catch (err) {
+            console.warn("initializeMonthDataApi failed for month", month, err);
+            // Don't throw; continue with other months
+          }
+        });
+
+        await Promise.all(initPromises);
+
+        // Refresh UI for selected month
+        const targetMonth = selectedMonth || validMonths[0];
+        const updatedData = await getMemberDataApi(targetMonth);
+        setMemberData(updatedData);
       } else {
-        const updatedData = await getMemberDataApi(selectedMonth);
+        // No established date and no months - use current month as fallback
+        const fallbackMonth = getCurrentMonth();
+        await initializeMonthDataApi(fallbackMonth);
+
+        allMonths = await getAllMonthsApi();
+        validMonths = Array.isArray(allMonths) ? allMonths : [];
+
+        const sortedMonths = [...validMonths].sort((a, b) => {
+          const dateA = new Date(a + "-01");
+          const dateB = new Date(b + "-01");
+          return dateB.getTime() - dateA.getTime();
+        });
+
+        setMonths(sortedMonths);
+        setSelectedMonth(fallbackMonth);
+
+        const updatedData = await getMemberDataApi(fallbackMonth);
         setMemberData(updatedData);
       }
 
+      // Clear form and close dialog
       setNewMemberData({ subUserName: "", phoneNumber: "" });
       setErrors({});
       setTouched({ subUserName: false, phoneNumber: false });
@@ -407,7 +580,11 @@ export default function AnalyticsPage() {
         const errorMessage =
           error.response?.data?.error?.toLowerCase() ||
           error.response?.data?.message?.toLowerCase();
-        if (errorMessage.includes("phone") && errorMessage.includes("already")) {
+        if (
+          errorMessage &&
+          errorMessage.includes("phone") &&
+          errorMessage.includes("already")
+        ) {
           showErrorToast("Phone number already in use");
           setErrors((prev) => ({
             ...prev,
@@ -427,28 +604,26 @@ export default function AnalyticsPage() {
     }
   };
 
-  const isNewMandal = async (): Promise<boolean> => {
-    try {
-      const allMonths = await getAllMonthsApi();
-      return !Array.isArray(allMonths) || allMonths.length === 0;
-    } catch (error) {
-      console.error("Error checking mandal status:", error);
-      return true;
-    }
-  };
-
   const handleAddData = async () => {
     if (!formData.subUserId || !selectedMonth) {
       showErrorToast("Please select a member and month");
       return;
     }
 
+    if (!/^\d{4}-\d{2}$/.test(selectedMonth)) {
+      showErrorToast("Invalid month format. Expected YYYY-MM");
+      return;
+    }
+
     try {
       setUpdatingMemberId(formData.subUserId);
+
+      const currentInstallment = parseInt(formData.installment) || 0;
+
       const data = {
         subUserId: formData.subUserId,
         month: selectedMonth,
-        installment: parseInt(formData.installment) || 0,
+        installment: currentInstallment,
         amount: parseInt(formData.amount) || 0,
         interest: parseInt(formData.interest) || 0,
         fine: parseInt(formData.fine) || 0,
@@ -456,8 +631,14 @@ export default function AnalyticsPage() {
         newWithdrawal: parseInt(formData.newWithdrawal) || 0,
       };
 
-      const response = await createMemberDataApi(data);
-      showSuccessToast(response.message || "Member data updated successfully");
+      await createMemberDataApi(data);
+
+      setManualUpdateStatus((prev) => ({
+        ...prev,
+        [`${formData.subUserId}_${selectedMonth}`]: isInstallmentPaid,
+      }));
+
+      showSuccessToast("Member data updated successfully!");
 
       const updatedData = await getMemberDataApi(selectedMonth);
       setMemberData(updatedData);
@@ -471,71 +652,208 @@ export default function AnalyticsPage() {
         withdrawal: "",
         newWithdrawal: "",
       });
+      setIsInstallmentPaid(true);
+      setSelectedMemberName("");
       setIsAddDialogOpen(false);
-    } catch (error) {
-      console.log("🚀 ~ handleAddData ~ error:", error);
-      showErrorToast("Failed to update member data");
-    } finally {
+    } catch (error: unknown) {
+  console.log("🚀 ~ handleAddData ~ error:", error);
+
+  const err = error as {
+    response?: {
+      data?: {
+        message?: string;
+      };
+    };
+  };
+
+  const message = err.response?.data?.message;
+
+  if (message?.includes("Month is required") || message?.includes("YYYY-MM")) {
+    showErrorToast("ત્રુટિ: મહિનો YYYY-MM ફોર્મેટમાં જરૂરી છે");
+  } else {
+    showErrorToast("Failed to update member data");
+  }
+} finally {
       setUpdatingMemberId(null);
+    }
+  };
+
+  const handleHaptoSet = async () => {
+    if (!haptoValue) {
+      showErrorToast("Please enter a value for Hapto");
+      return;
+    }
+
+    const numValue = parseInt(haptoValue);
+    if (isNaN(numValue) || numValue < 0) {
+      showErrorToast("Please enter a valid positive number");
+      return;
+    }
+
+    if (!mandalId) {
+      showErrorToast("Mandal not found");
+      return;
+    }
+
+    try {
+      const isFirstTimeSet = !isHaptoSet;
+
+      // Get current month to check
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonthNum = now.getMonth() + 1;
+      const currentMonthStr = `${currentYear}-${currentMonthNum
+        .toString()
+        .padStart(2, "0")}`;
+
+      // Check if selected month is current or future month
+      const shouldUpdateSelectedMonth =
+        selectedMonth && selectedMonth >= currentMonthStr;
+      console.log(
+        "🚀 ~ handleHaptoSet ~ shouldUpdateSelectedMonth:",
+        shouldUpdateSelectedMonth
+      );
+
+      const result = await updateMandalInstallmentApi(
+        mandalId,
+        numValue,
+        selectedMonth
+      );
+
+      setMandalMonthlyInstallment(result.setInstallment ?? numValue);
+      setIsHaptoSet((result.setInstallment ?? numValue) > 0);
+      console.log("🚀 ~ handleHaptoSet ~ setIsHaptoSet:", setIsHaptoSet);
+      setHaptoLabelValue(`Hapto: ₹${result.setInstallment ?? numValue}`);
+      console.log(
+        "🚀 ~ handleHaptoSet ~ setHaptoLabelValue:",
+        setHaptoLabelValue
+      );
+
+      showSuccessToast(
+        `Hapto value set to ₹${result.setInstallment ?? numValue}`
+      );
+
+      // Update UI only if selected month is current or future month
+      if (selectedMonth && shouldUpdateSelectedMonth) {
+        setIsTableDataLoading(true);
+        const updatedData = await getMemberDataApi(selectedMonth);
+        setMemberData(updatedData);
+        console.log("🚀 ~ handleHaptoSet ~ setMemberData:", setMemberData);
+      } else if (selectedMonth && !shouldUpdateSelectedMonth) {
+        // Selected month is previous month - show message
+        showSuccessToast(
+          `Hapto updated for future months. Current view shows previous month ${selectedMonth}`
+        );
+      }
+
+      if (isFirstTimeSet) {
+        showSuccessToast(
+          `Hapto value set. Future months will use ₹${numValue}`
+        );
+      } else {
+        showSuccessToast(
+          `Hapto value updated. Future months will use ₹${numValue}`
+        );
+      }
+
+      setIsHaptoDialogOpen(false);
+      setHaptoValue("");
+    } catch (error) {
+      console.error("Error setting hapto value:", error);
+      showErrorToast("Failed to set hapto value");
+    } finally {
+      setIsTableDataLoading(false);
     }
   };
 
   const handleAddNewMonth = async () => {
     let newMonth: string;
+
     if (months.length === 0 && establishedDate) {
       const [year, month] = establishedDate.slice(0, 7).split("-").map(Number);
-      const nextMonth = month === 12 ? 1 : month + 1;
-      const nextYear = month === 12 ? year + 1 : year;
-      newMonth = `${nextYear}-${nextMonth.toString().padStart(2, "0")}`;
+      newMonth = `${year}-${month.toString().padStart(2, "0")}`;
     } else if (months.length > 0) {
       const latestMonth = months[0];
       const [year, month] = latestMonth.split("-").map(Number);
-      const nextMonth = month === 12 ? 1 : month + 1;
-      const nextYear = month === 12 ? year + 1 : year;
+      let nextMonth = month + 1;
+      let nextYear = year;
+
+      if (nextMonth > 12) {
+        nextMonth = 1;
+        nextYear = year + 1;
+      }
+
       newMonth = `${nextYear}-${nextMonth.toString().padStart(2, "0")}`;
     } else {
       newMonth = getCurrentMonth();
+    }
+
+    if (!/^\d{4}-\d{2}$/.test(newMonth)) {
+      showErrorToast("Invalid month format. Expected YYYY-MM");
+      return;
     }
 
     try {
       setIsAddingMonth(true);
       setIsTableLoading(true);
 
-      let prevData: MemberData[] = [];
-      if (months.length > 0) {
-        const latestMonth = months[0];
-        prevData = await getMemberDataApi(latestMonth);
-      }
-
-      for (const subUser of subUsers) {
-        const prev = prevData.find((p) => p.subUser._id === subUser._id);
-        const data = {
-          subUserId: subUser._id,
-          month: newMonth,
-          installment: 0,
-          amount: prev ? prev.amount + prev.newWithdrawal - prev.withdrawal : 0,
-          interest: 0,
-          fine: 0,
-          withdrawal: 0,
-          newWithdrawal: 0,
-        };
-        await createMemberDataApi(data);
-      }
+      await initializeMonthDataApi(newMonth);
 
       const allMonths = await getAllMonthsApi();
       const validMonths = Array.isArray(allMonths) ? allMonths : [];
+
+      validMonths.sort((a, b) => {
+        const dateA = new Date(a + "-01");
+        const dateB = new Date(b + "-01");
+        return dateB.getTime() - dateA.getTime();
+      });
+
       setMonths(validMonths);
       setSelectedMonth(newMonth);
-      
+
       const data = await getMemberDataApi(newMonth);
       setMemberData(data);
-      setSelectedMembers([]);
 
-      showSuccessToast(`Month ${newMonth} initialized successfully`);
-    } catch (error) {
-      showErrorToast("Error initializing new month data:");
-      console.error(error);
-    } finally {
+      const prevData =
+        months.length > 0 ? await getMemberDataApi(months[0]) : [];
+      setPreviousMonthData(prevData);
+
+      const newStatus = { ...manualUpdateStatus };
+      subUsers.forEach((subUser) => {
+        const key = `${subUser._id}_${newMonth}`;
+        if (!(key in newStatus)) {
+          newStatus[key] = false;
+        }
+      });
+      setManualUpdateStatus(newStatus);
+
+      showSuccessToast(
+        `મહિનો ${newMonth} બનાવાયો! (Installment for this month will use backend's setInstallment)`
+      );
+    } catch (error: unknown) {
+  
+  const err = error as {
+    response?: {
+      data?: {
+        message?: string;
+      };
+    };
+  };
+
+  const message = err.response?.data?.message;
+
+  console.error("Error creating new month:", error);
+
+  if (message?.includes("Month is required")) {
+    showErrorToast("ત્રુટિ: મહિનો YYYY-MM ફોર્મેટમાં જરૂરી છે");
+  } else if (message) {
+    showErrorToast(`ત્રુટિ: ${message}`);
+  } else {
+    showErrorToast("નવો મહિનો બનાવામાં ત્રુટિ");
+  }
+    }
+
+     finally {
       setIsAddingMonth(false);
       setIsTableLoading(false);
     }
@@ -576,75 +894,81 @@ export default function AnalyticsPage() {
     touched[field] && !!errors[field];
 
   const handleRowAction = (row: MemberData) => {
+    const currentInstallment = row.installment;
+
     setFormData({
       subUserId: row.subUser._id,
-      installment: row.installment?.toString() || "0",
+      installment: currentInstallment.toString(),
       amount: row.amount?.toString() || "0",
       interest: row.interest?.toString() || "0",
       fine: row.fine?.toString() || "0",
       withdrawal: row.withdrawal?.toString() || "0",
       newWithdrawal: row.newWithdrawal?.toString() || "0",
     });
+
+    const isManuallyUpdated =
+      manualUpdateStatus[`${row.subUser._id}_${selectedMonth}`] || false;
+    setIsInstallmentPaid(isManuallyUpdated);
+
+    setSelectedMemberName(row.subUser?.subUserName || "");
     setIsAddDialogOpen(true);
+  };
+
+  const handleInputFocus = (field: keyof Omit<FormData, "subUserId">) => {
+    if (formData[field] === "0") {
+      setFormData({
+        ...formData,
+        [field]: "",
+      });
+    }
+  };
+
+  const handleInputBlur = (field: keyof Omit<FormData, "subUserId">) => {
+    if (formData[field] === "") {
+      if (field === "installment") {
+        return;
+      }
+      setFormData({
+        ...formData,
+        [field]: "0",
+      });
+    }
   };
 
   useEffect(() => {
     if (memberData.length > 0 && selectedMonth) {
-      const membersWithInstallmentPlusInterest = memberData
-        .filter((member) => member.total > 0)
+      const membersWithCheckedBox = memberData
+        .filter((member) => shouldCheckboxBeChecked(member.subUser._id))
         .map((member) => member._id);
-      setSelectedMembers(membersWithInstallmentPlusInterest);
+      setSelectedMembers(membersWithCheckedBox);
     }
-  }, [memberData, selectedMonth]);
+  }, [memberData, selectedMonth, manualUpdateStatus]);
 
-  // Show only initial skeleton, not when there's no data
   if (isDashboardLoading && !hasDataLoaded) {
     return (
-      <div className="p-6 space-y-6">
-        {/* Page Header Skeleton */}
+      <div className="p-4 md:p-6 space-y-6">
         <div className="space-y-4">
-          <div className="h-8 w-64 bg-gray-200 rounded animate-pulse" />
-          <div className="h-4 w-96 bg-gray-200 rounded animate-pulse" />
+          <div className="h-8 w-48 md:w-64 bg-gray-200 rounded animate-pulse" />
+          <div className="h-4 w-72 md:w-96 bg-gray-200 rounded animate-pulse" />
           <div className="flex flex-wrap gap-2">
-            <div className="h-10 w-32 bg-gray-200 rounded animate-pulse" />
-            <div className="h-10 w-28 bg-gray-200 rounded animate-pulse" />
-            <div className="h-10 w-32 bg-gray-200 rounded animate-pulse" />
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className="h-10 w-28 md:w-32 bg-gray-200 rounded animate-pulse"
+              />
+            ))}
           </div>
         </div>
 
-        {/* Stats Cards Skeleton */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
           {Array.from({ length: 4 }).map((_, i) => (
             <SkeletonCard key={i} />
           ))}
         </div>
 
-        {/* Main Table Skeleton */}
         <div className="space-y-4">
-          <div className="h-10 w-48 bg-gray-200 rounded animate-pulse" />
+          <div className="h-10 w-40 md:w-48 bg-gray-200 rounded animate-pulse" />
           <SkeletonTable rows={5} cols={11} />
-        </div>
-
-        {/* Summary Section Skeleton */}
-        <div className="space-y-6">
-          <div className="h-8 w-64 bg-gray-200 rounded animate-pulse" />
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div
-                key={i}
-                className="p-4 rounded-lg bg-white/60 border border-gray-200"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-28 h-4 bg-gray-200/60 rounded animate-pulse" />
-                  <div className="w-6 h-6 bg-gray-200/60 rounded animate-pulse" />
-                </div>
-                <div className="space-y-2">
-                  <div className="w-16 h-8 bg-gray-200/60 rounded animate-pulse" />
-                  <div className="w-24 h-3 bg-gray-200/60 rounded animate-pulse" />
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
     );
@@ -656,13 +980,23 @@ export default function AnalyticsPage() {
         title="Monthly Ledger"
         description="View your monthly ledger, withdrawals, and interest earnings in one place."
       >
-        <div className="flex flex-col gap-2 sm:flex-row sm:gap-2">
-          <div className="flex flex-row gap-2">
+      <div
+  className="
+    grid grid-cols-2 gap-3          
+    sm:grid-cols-2                   
+    lg:flex lg:flex-row lg:flex-wrap lg:items-center lg:gap-3 
+    lg:w-full lg:justify-start       
+  "
+>
+
+          <div className="col-span-2 w-full sm:w-auto lg:w-auto ">
             <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-              <SelectTrigger className="w-[180px] sm:w-[180px]">
+              <SelectTrigger className="w-full sm:w-[180px]">
                 <Calendar className="h-4 w-4 mr-2" />
                 {isAddingMonth ? (
-                  <span className="text-gray-400">Loading months...</span>
+                  <span className="text-gray-400 text-sm">
+                    Loading months...
+                  </span>
                 ) : (
                   <SelectValue placeholder="Select month" />
                 )}
@@ -673,7 +1007,7 @@ export default function AnalyticsPage() {
                     months.map((month) => (
                       <SelectItem key={month} value={month}>
                         {new Date(month + "-01").toLocaleString("default", {
-                          month: "long",
+                          month: "short",
                           year: "numeric",
                         })}
                       </SelectItem>
@@ -686,77 +1020,275 @@ export default function AnalyticsPage() {
                 </SelectContent>
               )}
             </Select>
+          </div>
+          <div className="w-full sm:w-auto lg:w-auto">
+
+            <Button
+              onClick={handleAddNewMonth}
+              className="w-full sm:w-auto"
+              disabled={isAddingMonth || subUsers.length === 0}
+            >
+              {isAddingMonth ? (
+                <Loader
+                  size="sm"
+                  variant="white"
+                  type="dots"
+                  className="!gap-0"
+                  show
+                />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              <span className="ml-2">
+                {isAddingMonth ? "Adding..." : "Add New Month"}
+              </span>
+            </Button>
+          </div>
+           <div className="w-full sm:w-auto lg:w-auto">
+
+            <div className="sm:ml-auto">
+              <Dialog
+                open={isAddMemberDialogOpen}
+                onOpenChange={handleDialogClose}
+              >
+                <DialogTrigger asChild>
+                  <Button className="w-full sm:w-auto">
+                    <Plus className="h-4 w-4" />
+                    <span className="ml-2">Add Member</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-[95vw] sm:max-w-md p-4 sm:p-6">
+                  <DialogHeader>
+                    <DialogTitle className="text-lg sm:text-xl">
+                      Add New Member
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="grid grid-cols-1 gap-4 py-4">
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor="subUserName"
+                        className="text-sm sm:text-base"
+                      >
+                        Member Name
+                      </Label>
+                      <Input
+                        id="subUserName"
+                        value={newMemberData.subUserName}
+                        onChange={handleNameChange}
+                        placeholder="Enter member name"
+                        className={
+                          hasError("subUserName")
+                            ? "border-red-500 focus:ring-red-500"
+                            : ""
+                        }
+                        disabled={isAddingMember}
+                      />
+                      {hasError("subUserName") && (
+                        <p className="text-red-500 text-xs mt-1">
+                          {errors.subUserName}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor="phoneNumber"
+                        className="text-sm sm:text-base"
+                      >
+                        Phone Number
+                      </Label>
+                      <Input
+                        id="phoneNumber"
+                        type="tel"
+                        value={newMemberData.phoneNumber}
+                        onChange={handlePhoneNumberChange}
+                        placeholder="+91 12345 67890"
+                        className={
+                          hasError("phoneNumber")
+                            ? "border-red-500 focus:ring-red-500"
+                            : ""
+                        }
+                        disabled={isAddingMember}
+                      />
+                      {hasError("phoneNumber") && (
+                        <p className="text-red-500 text-xs mt-1">
+                          {errors.phoneNumber}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-col sm:flex-row justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      type="button"
+                      onClick={() => handleDialogClose(false)}
+                      className="w-full sm:w-auto"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={handleAddMember}
+                      disabled={
+                        Object.keys(validateNewMemberForm(newMemberData))
+                          .length > 0 || isAddingMember
+                      }
+                      className="w-full sm:w-auto"
+                    >
+                      {isAddingMember ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <Loader
+                            size="sm"
+                            variant="white"
+                            type="dots"
+                            className="!gap-0"
+                            show
+                          />
+                          Adding...
+                        </div>
+                      ) : (
+                        "Add Member"
+                      )}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+          <div className="w-full sm:w-auto lg:w-auto">
+
+            <div className="flex items-center gap-2">
+              <Dialog
+                open={isHaptoDialogOpen}
+                onOpenChange={setIsHaptoDialogOpen}
+              >
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="w-full sm:w-auto">
+                    <Plus className="h-4 w-4" />
+                    <span className="ml-2">
+                      {isHaptoSet ? "Update Hapto" : "Set Hapto"}
+                    </span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-[95vw] sm:max-w-md p-4 sm:p-6">
+                  <DialogHeader>
+                    <DialogTitle className="text-lg sm:text-xl">
+                      {isHaptoSet ? "Update Hapto Value" : "Set Hapto Value"}
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="grid grid-cols-1 gap-4 py-4">
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor="haptoValue"
+                        className="text-sm sm:text-base"
+                      >
+                        હપ્તো (Installment)
+                      </Label>
+                      <Input
+                        id="haptoValue"
+                        type="number"
+                        value={haptoValue}
+                        onChange={(e) => setHaptoValue(e.target.value)}
+                        placeholder={
+                          isHaptoSet
+                            ? "Update hapto value"
+                            : "Enter hapto value (e.g., 1000)"
+                        }
+                        className="text-base"
+                      />
+                      {isHaptoSet && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Note: Updating hapto will only affect CURRENT month
+                          and FUTURE months. Previous months installment values
+                          will remain unchanged.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-col sm:flex-row justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      type="button"
+                      onClick={() => {
+                        setIsHaptoDialogOpen(false);
+                        setHaptoValue("");
+                      }}
+                      className="w-full sm:w-auto"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={handleHaptoSet}
+                      className="w-full sm:w-auto"
+                      disabled={!haptoValue}
+                    >
+                      {isHaptoSet ? "Update Hapto" : "Set Hapto"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+          <div className="w-full flex justify-start lg:justify-center">
+
+            {haptoLabelValue && (
+              <Badge variant="secondary" className="text-sm">
+                {haptoLabelValue}
+              </Badge>
+            )}
+          </div>
+        </div>
+      </PageHeader>
+          <div>
 
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="w-auto sm:w-auto" disabled={!selectedMonth}>
+                {/* <Button className="w-full sm:w-auto" disabled={!selectedMonth}>
                   <Plus className="h-4 w-4" />
-                  Update Member
-                </Button>
+                  <span className="ml-2">Update Member</span>
+                </Button> */}
               </DialogTrigger>
-              <DialogContent className="max-w-[90vw] p-4 sm:max-w-2xl sm:p-6">
+              <DialogContent className="max-w-[95vw] sm:max-w-2xl p-4 sm:p-6">
                 <DialogHeader>
-                  <DialogTitle className="text-base sm:text-xl">
+                  <DialogTitle className="text-lg sm:text-xl">
                     Update Member Data
                   </DialogTitle>
                 </DialogHeader>
-                <div className="grid grid-cols-1 gap-3 py-3 sm:grid-cols-2 sm:gap-4 sm:py-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="subUserId" className="text-sm sm:text-base">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label
+                      htmlFor="memberName"
+                      className="text-sm sm:text-base"
+                    >
                       સભ્યનું નામ (Member Name)
                     </Label>
-                    <Select
-                      value={formData.subUserId}
-                      onValueChange={(value) => {
-                        const existing = memberData.find(
-                          (m) => m.subUser?._id === value
-                        );
-                        if (existing) {
-                          setFormData({
-                            subUserId: value,
-                            installment:
-                              existing.installment?.toString() || "0",
-                            amount: existing.amount?.toString() || "0",
-                            interest: existing.interest?.toString() || "0",
-                            fine: existing.fine?.toString() || "0",
-                            withdrawal: existing.withdrawal?.toString() || "0",
-                            newWithdrawal:
-                              existing.newWithdrawal?.toString() || "0",
-                          });
-                        } else {
-                          setFormData({
-                            subUserId: value,
-                            installment: "0",
-                            amount: "0",
-                            interest: "0",
-                            fine: "0",
-                            withdrawal: "0",
-                            newWithdrawal: "0",
-                          });
-                        }
-                      }}
-                      disabled={!subUsers || subUsers.length === 0}
-                    >
-                      <SelectTrigger>
-                        <SelectValue
-                          placeholder={
-                            !subUsers || subUsers.length === 0
-                              ? "No member added"
-                              : "Select member"
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {subUsers &&
-                          subUsers.map((user) => (
-                            <SelectItem key={user._id} value={user._id}>
-                              {user.subUserName}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
+                    <Input
+                      id="memberName"
+                      value={selectedMemberName}
+                      readOnly
+                      className="w-full text-base"
+                      placeholder="Selected member name"
+                    />
+                    <input type="hidden" value={formData.subUserId} />
                   </div>
-                  <div className="space-y-1.5">
+
+                  <div className="space-y-2 sm:col-span-2 flex items-center gap-2">
+                    <Checkbox
+                      id="installmentPaid"
+                      checked={isInstallmentPaid}
+                      onCheckedChange={(checked) =>
+                        setIsInstallmentPaid(checked as boolean)
+                      }
+                    />
+                    <Label
+                      htmlFor="installmentPaid"
+                      className="text-sm sm:text-base"
+                    >
+                      હપ્તો ચૂકવાયો (Installment Paid)
+                    </Label>
+                  </div>
+
+                  <div className="space-y-2">
                     <Label
                       htmlFor="installment"
                       className="text-sm sm:text-base"
@@ -773,12 +1305,15 @@ export default function AnalyticsPage() {
                           installment: e.target.value,
                         })
                       }
-                      placeholder="Enter installment amount"
-                      className="text-sm sm:text-base"
+                      onFocus={() => handleInputFocus("installment")}
+                      onBlur={() => handleInputBlur("installment")}
+                      placeholder="Enter installment"
+                      className="text-base"
                       disabled={updatingMemberId !== null}
                     />
                   </div>
-                  <div className="space-y-1.5">
+
+                  <div className="space-y-2">
                     <Label htmlFor="amount" className="text-sm sm:text-base">
                       આ નો ઉ. (Amount)
                     </Label>
@@ -789,12 +1324,15 @@ export default function AnalyticsPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, amount: e.target.value })
                       }
+                      onFocus={() => handleInputFocus("amount")}
+                      onBlur={() => handleInputBlur("amount")}
                       placeholder="Enter amount"
-                      className="text-sm sm:text-base"
+                      className="text-base"
                       disabled={updatingMemberId !== null}
                     />
                   </div>
-                  <div className="space-y-1.5">
+
+                  <div className="space-y-2">
                     <Label htmlFor="interest" className="text-sm sm:text-base">
                       બ્યાજ (Interest)
                     </Label>
@@ -805,12 +1343,15 @@ export default function AnalyticsPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, interest: e.target.value })
                       }
+                      onFocus={() => handleInputFocus("interest")}
+                      onBlur={() => handleInputBlur("interest")}
                       placeholder="Enter interest"
-                      className="text-sm sm:text-base"
+                      className="text-base"
                       disabled={updatingMemberId !== null}
                     />
                   </div>
-                  <div className="space-y-1.5">
+
+                  <div className="space-y-2">
                     <Label htmlFor="fine" className="text-sm sm:text-base">
                       દંડ (Fine)
                     </Label>
@@ -821,12 +1362,15 @@ export default function AnalyticsPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, fine: e.target.value })
                       }
-                      placeholder="Enter fine amount"
-                      className="text-sm sm:text-base"
+                      onFocus={() => handleInputFocus("fine")}
+                      onBlur={() => handleInputBlur("fine")}
+                      placeholder="Enter fine"
+                      className="text-base"
                       disabled={updatingMemberId !== null}
                     />
                   </div>
-                  <div className="space-y-1.5">
+
+                  <div className="space-y-2">
                     <Label
                       htmlFor="withdrawal"
                       className="text-sm sm:text-base"
@@ -840,12 +1384,15 @@ export default function AnalyticsPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, withdrawal: e.target.value })
                       }
-                      placeholder="Enter withdrawal amount"
-                      className="text-sm sm:text-base"
+                      onFocus={() => handleInputFocus("withdrawal")}
+                      onBlur={() => handleInputBlur("withdrawal")}
+                      placeholder="Enter withdrawal"
+                      className="text-base"
                       disabled={updatingMemberId !== null}
                     />
                   </div>
-                  <div className="space-y-1.5">
+
+                  <div className="space-y-2">
                     <Label
                       htmlFor="newWithdrawal"
                       className="text-sm sm:text-base"
@@ -862,13 +1409,15 @@ export default function AnalyticsPage() {
                           newWithdrawal: e.target.value,
                         })
                       }
-                      placeholder="Enter new withdrawal amount"
-                      className="text-sm sm:text-base"
+                      onFocus={() => handleInputFocus("newWithdrawal")}
+                      onBlur={() => handleInputBlur("newWithdrawal")}
+                      placeholder="Enter new withdrawal"
+                      className="text-base"
                       disabled={updatingMemberId !== null}
                     />
                   </div>
                 </div>
-                <div className="flex justify-end gap-2">
+                <div className="flex flex-col sm:flex-row justify-end gap-2">
                   <Button
                     variant="outline"
                     type="button"
@@ -882,25 +1431,23 @@ export default function AnalyticsPage() {
                         withdrawal: "",
                         newWithdrawal: "",
                       });
+                      setIsInstallmentPaid(true);
+                      setSelectedMemberName("");
                       setUpdatingMemberId(null);
                       setIsAddDialogOpen(false);
                     }}
-                    className="text-sm sm:text-base"
+                    className="w-full sm:w-auto"
                   >
                     Cancel
                   </Button>
                   <Button
                     type="button"
                     onClick={handleAddData}
-                    className="text-sm sm:text-base"
-                    disabled={
-                      !subUsers ||
-                      subUsers.length === 0 ||
-                      updatingMemberId !== null
-                    }
+                    className="w-full sm:w-auto"
+                    disabled={!selectedMemberName || updatingMemberId !== null}
                   >
                     {updatingMemberId ? (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-center gap-2">
                         <Loader
                           size="sm"
                           variant="white"
@@ -918,142 +1465,14 @@ export default function AnalyticsPage() {
               </DialogContent>
             </Dialog>
           </div>
-
-          <Button
-            onClick={handleAddNewMonth}
-            className="w-auto text-sm px-2 py-1 self-start sm:w-auto sm:text-base sm:px-4 sm:py-2"
-            disabled={isAddingMonth}
-          >
-            {isAddingMonth ? (
-              <Loader
-                size="sm"
-                variant="white"
-                type="dots"
-                className="!gap-0"
-                show
-              />
-            ) : (
-              <Plus className="h-4 w-4" />
-            )}
-            {isAddingMonth ? "Adding..." : "Add New Month"}
-          </Button>
-
-          <div className="fixed bottom-4 right-4 sm:static sm:bottom-auto sm:right-auto">
-            <Dialog
-              open={isAddMemberDialogOpen}
-              onOpenChange={handleDialogClose}
-            >
-              <DialogTrigger asChild>
-                <Button className="w-12 h-12 rounded-full sm:rounded sm:w-auto sm:h-auto sm:p-2 flex items-center justify-center">
-                  <Plus className="h-6 w-6 sm:h-4 sm:w-4" />
-                  <span className="hidden sm:inline">Add Member</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-[90vw] p-4 sm:max-w-md sm:p-6">
-                <DialogHeader>
-                  <DialogTitle className="text-base sm:text-xl">
-                    Add New Member
-                  </DialogTitle>
-                </DialogHeader>
-                <div className="grid grid-cols-1 gap-3 py-3">
-                  <div className="space-y-1.5">
-                    <Label
-                      htmlFor="subUserName"
-                      className="text-sm sm:text-base"
-                    >
-                      Member Name
-                    </Label>
-                    <Input
-                      id="subUserName"
-                      value={newMemberData.subUserName}
-                      onChange={handleNameChange}
-                      placeholder="Enter member name"
-                      className={
-                        hasError("subUserName")
-                          ? "border-red-500 focus:ring-red-500"
-                          : ""
-                      }
-                      disabled={isAddingMember}
-                    />
-                    {hasError("subUserName") && (
-                      <p className="text-red-500 text-xs mt-1">
-                        {errors.subUserName}
-                      </p>
-                    )}
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label
-                      htmlFor="phoneNumber"
-                      className="text-sm sm:text-base"
-                    >
-                      Phone Number
-                    </Label>
-                    <Input
-                      id="phoneNumber"
-                      type="tel"
-                      value={newMemberData.phoneNumber}
-                      onChange={handlePhoneNumberChange}
-                      placeholder="+91 12345 67890"
-                      className={
-                        hasError("phoneNumber")
-                          ? "border-red-500 focus:ring-red-500"
-                          : ""
-                      }
-                      disabled={isAddingMember}
-                    />
-                    {hasError("phoneNumber") && (
-                      <p className="text-red-500 text-xs mt-1">
-                        {errors.phoneNumber}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2 mt-4">
-                  <Button
-                    variant="outline"
-                    type="button"
-                    onClick={() => handleDialogClose(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={handleAddMember}
-                    disabled={
-                      Object.keys(validateNewMemberForm(newMemberData)).length >
-                        0 || isAddingMember
-                    }
-                  >
-                    {isAddingMember ? (
-                      <div className="flex items-center gap-2">
-                        <Loader
-                          size="sm"
-                          variant="white"
-                          type="dots"
-                          className="!gap-0"
-                          show
-                        />
-                        Adding...
-                      </div>
-                    ) : (
-                      "Add Member"
-                    )}
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
-      </PageHeader>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Members</CardTitle>
-            <HiOutlineUserGroup />
+            <HiOutlineUserGroup className="h-4 w-4" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-xl md:text-2xl font-bold">
               {calculations.totalMembers}
             </div>
             <p className="text-xs text-green-600">Active members</p>
@@ -1065,10 +1484,10 @@ export default function AnalyticsPage() {
             <CardTitle className="text-sm font-medium">
               Total Collection
             </CardTitle>
-            <BiDollar />
+            <BiDollar className="h-4 w-4" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-xl md:text-2xl font-bold">
               ₹{calculations.totalInstallments.toLocaleString()}
             </div>
             <p className="text-xs text-green-600">Total amount</p>
@@ -1080,10 +1499,10 @@ export default function AnalyticsPage() {
             <CardTitle className="text-sm font-medium">
               Interest Earned
             </CardTitle>
-            <HiArrowTrendingUp />
+            <HiArrowTrendingUp className="h-4 w-4" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-xl md:text-2xl font-bold">
               ₹{calculations.totalInterest.toLocaleString()}
             </div>
             <p className="text-xs text-green-600">Monthly interest</p>
@@ -1093,10 +1512,10 @@ export default function AnalyticsPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Withdrawals</CardTitle>
-            <HiArrowTrendingDown />
+            <HiArrowTrendingDown className="h-4 w-4" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-xl md:text-2xl font-bold">
               ₹{calculations.totalWithdrawals.toLocaleString()}
             </div>
             <p className="text-xs text-red-600">Total withdrawals</p>
@@ -1104,227 +1523,302 @@ export default function AnalyticsPage() {
         </Card>
       </div>
 
-      <Card className="">
+      <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <CardTitle className="text-xl font-bold text-red-600">
+              <CardTitle className="text-lg md:text-xl font-bold text-red-600">
                 {mandalName}
               </CardTitle>
-              <div className="flex gap-4 mt-2">
-                <Badge variant="outline">{calculations.totalMembers}</Badge>
+              <div className="flex gap-2 mt-2 flex-wrap">
+                <Badge variant="outline">
+                  {calculations.totalMembers} Members
+                </Badge>
                 <Badge variant="outline">
                   {selectedMonth
-                    ? new Date(selectedMonth + "-01").toLocaleDateString("en-GB")
+                    ? new Date(selectedMonth + "-01").toLocaleDateString(
+                        "en-GB",
+                        {
+                          month: "short",
+                          year: "numeric",
+                        }
+                      )
                     : "No Month Selected"}
+                </Badge>
+                <Badge variant="outline" className="bg-blue-100 text-blue-800">
+                  {isHaptoSet
+                    ? `Monthly: ₹${mandalMonthlyInstallment}`
+                    : "Monthly: Not Set"}
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className="bg-green-100 text-green-800"
+                >
+                  {months.length} Months
                 </Badge>
               </div>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm">
-                Export
-              </Button>
-            </div>
+            <Button variant="outline" size="sm" className="w-full sm:w-auto">
+              Export
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto max-w-[calc(100vw-2rem)] sm:max-w-none">
-            <Table className="min-w-[800px]">
-              <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead className="w-12 text-center font-semibold">
-                    <Checkbox
-                      checked={
-                        selectedMembers.length === memberData.length &&
-                        memberData.length > 0
-                          ? true
-                          : selectedMembers.length > 0
-                          ? "indeterminate"
-                          : false
-                      }
-                      disabled
-                    />
-                  </TableHead>
-                  <TableHead className="w-12 text-center font-semibold">
-                    ક્રમ નં.
-                  </TableHead>
-                  <TableHead className="min-w-[150px] font-semibold">
-                    સભ્યનું નામ
-                  </TableHead>
-                  <TableHead className="text-center font-semibold min-w-[120px]">
-                    હપ્તો
-                  </TableHead>
-                  <TableHead className="text-center font-semibold min-w-[100px]">
-                    આ.નો ઉ.
-                  </TableHead>
-                  <TableHead className="text-center font-semibold min-w-[100px]">
-                    વ્યાજ
-                  </TableHead>
-                  <TableHead className="text-center font-semibold min-w-[100px]">
-                    દંડ
-                  </TableHead>
-                  <TableHead className="text-center font-semibold min-w-[100px]">
-                    ઉપાડ જમા
-                  </TableHead>
-                  <TableHead className="text-center font-semibold min-w-[100px]">
-                    નવો ઉપાડ
-                  </TableHead>
-                  <TableHead className="text-center font-semibold min-w-[100px]">
-                    હપ્તો + વ્યાજ
-                  </TableHead>
-                  <TableHead className="text-center font-semibold min-w-[100px]">
-                    Action
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isTableLoading || isTableDataLoading ? (
-                  Array.from({ length: 5 }).map((_, index) => (
-                    <TableRow key={`skeleton-${index}`}>
-                      <TableCell className="text-center">
-                        <div className="h-5 w-5 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="h-5 w-8 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="h-5 w-40 bg-gray-200/60 rounded animate-pulse"></div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="h-5 w-24 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="h-5 w-20 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="h-5 w-20 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="h-5 w-20 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="h-5 w-24 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="h-5 w-24 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="h-5 w-28 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="h-8 w-20 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : memberData.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={11} className="text-center py-8">
-                      <div className="flex flex-col items-center justify-center text-gray-500">
-                        <HiOutlineUserGroup className="h-12 w-12 mb-4 opacity-50" />
-                        <p className="text-lg font-medium mb-2">
-                          No members added yet
-                        </p>
-                        <p className="text-sm text-gray-400">
-                          Click the + Add Member button to add your first member
-                        </p>
-                      </div>
-                    </TableCell>
+          <div className="overflow-x-auto -mx-4 md:mx-0">
+            <div className="min-w-[800px] px-4 md:px-0">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="w-10 md:w-12 text-center font-semibold">
+                      <Checkbox
+                        checked={
+                          selectedMembers.length === memberData.length &&
+                          memberData.length > 0
+                            ? true
+                            : selectedMembers.length > 0
+                            ? "indeterminate"
+                            : false
+                        }
+                        disabled
+                      />
+                    </TableHead>
+                    <TableHead className="w-10 md:w-12 text-center font-semibold text-xs md:text-sm">
+                      ક્રમ નં.
+                    </TableHead>
+                    <TableHead className="min-w-[120px] md:min-w-[150px] font-semibold text-xs md:text-sm">
+                      સભ્યનું નામ
+                    </TableHead>
+                    <TableHead className="text-center font-semibold min-w-[120px] md:min-w-[140px] text-xs md:text-sm">
+                      હપ્તો
+                    </TableHead>
+                    <TableHead className="text-center font-semibold min-w-[80px] md:min-w-[100px] text-xs md:text-sm">
+                      આ.નો ઉ.
+                    </TableHead>
+                    <TableHead className="text-center font-semibold min-w-[80px] md:min-w-[100px] text-xs md:text-sm">
+                      વ્યાજ
+                    </TableHead>
+                    <TableHead className="text-center font-semibold min-w-[80px] md:min-w-[100px] text-xs md:text-sm">
+                      દંડ
+                    </TableHead>
+                    <TableHead className="text-center font-semibold min-w-[100px] md:min-w-[100px] text-xs md:text-sm">
+                      ઉપાડ જમા
+                    </TableHead>
+                    <TableHead className="text-center font-semibold min-w-[100px] md:min-w-[100px] text-xs md:text-sm">
+                      નવો ઉપાડ
+                    </TableHead>
+                    <TableHead className="text-center font-semibold min-w-[100px] md:min-w-[120px] text-xs md:text-sm">
+                      હપ્તો + વ્યાજ
+                    </TableHead>
+                    <TableHead className="text-center font-semibold min-w-[80px] md:min-w-[100px] text-xs md:text-sm">
+                      Action
+                    </TableHead>
                   </TableRow>
-                ) : (
-                  memberData.map((row, index) => (
-                    <TableRow key={row._id}>
-                      <TableCell className="text-center">
-                        <Checkbox
-                          checked={selectedMembers.includes(row._id)}
-                          disabled
-                        />
-                      </TableCell>
-                      <TableCell className="text-center font-medium">
-                        {index + 1}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {row.subUser?.subUserName}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          ₹{row.installment?.toLocaleString()}
-                          <OverdueInfo
-                            memberId={row.subUser._id}
-                            currentMonth={selectedMonth}
-                            memberName={row.subUser?.subUserName}
-                            currentInstallment={row.installment}
-                          />
+                </TableHeader>
+                <TableBody>
+                  {isTableLoading || isTableDataLoading ? (
+                    Array.from({ length: 5 }).map((_, index) => (
+                      <TableRow key={`skeleton-${index}`}>
+                        <TableCell className="text-center">
+                          <div className="h-5 w-5 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="h-5 w-8 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="h-5 w-32 md:w-40 bg-gray-200/60 rounded animate-pulse"></div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="h-5 w-20 md:w-24 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="h-5 w-16 md:w-20 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="h-5 w-16 md:w-20 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="h-5 w-16 md:w-20 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="h-5 w-20 md:w-24 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="h-5 w-20 md:w-24 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="h-5 w-24 md:w-28 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="h-8 w-16 md:w-20 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : memberData.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={11} className="text-center py-8">
+                        <div className="flex flex-col items-center justify-center text-gray-500">
+                          <HiOutlineUserGroup className="h-10 w-10 md:h-12 md:w-12 mb-3 md:mb-4 opacity-50" />
+                          <p className="text-base md:text-lg font-medium mb-1 md:mb-2">
+                            No members added yet
+                          </p>
                         </div>
                       </TableCell>
-                      <TableCell className="text-center">
-                        {row?.amount > 0
-                          ? `₹${row?.amount.toLocaleString()}`
-                          : "-"}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {row?.interest > 0 ? `₹${row?.interest}` : "-"}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {row?.fine > 0 ? `₹${row?.fine}` : "-"}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {row?.withdrawal > 0
-                          ? `₹${row?.withdrawal.toLocaleString()}`
-                          : "-"}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {row?.newWithdrawal > 0
-                          ? `₹${row?.newWithdrawal.toLocaleString()}`
-                          : "-"}
-                      </TableCell>
-                      <TableCell className="text-center font-medium">
-                        ₹{row.total.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleRowAction(row)}
-                          disabled={updatingMemberId === row.subUser._id}
-                        >
-                          {updatingMemberId === row.subUser._id ? (
-                            <Loader
-                              size="sm"
-                              variant="primary"
-                              type="dots"
-                              className="!gap-0"
-                              show
-                            />
-                          ) : (
-                            "Update"
-                          )}
-                        </Button>
-                      </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                  ) : (
+                    memberData.map((row, index) => {
+                      const carriedForwardAmount =
+                        calculateCarriedForwardAmount(row.subUser._id);
+                      const carriedForwardInstallment =
+                        calculateCarriedForwardInstallment(row.subUser._id);
+                      const isChecked = shouldCheckboxBeChecked(
+                        row.subUser._id
+                      );
+                      const hasPaidNewInstallment =
+                        row.installment > carriedForwardInstallment;
+
+                      const totalInstallmentDisplay =
+                        getDisplayInstallmentValue(row);
+
+                      return (
+                        <TableRow key={row._id}>
+                          <TableCell className="text-center">
+                            <Checkbox checked={isChecked} disabled />
+                          </TableCell>
+                          <TableCell className="text-center font-medium text-xs md:text-sm">
+                            {index + 1}
+                          </TableCell>
+                          <TableCell className="font-medium text-xs md:text-sm">
+                            <div className="flex items-center">
+                              {row.subUser?.subUserName}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center text-xs md:text-sm">
+                            <div className="flex flex-col items-center">
+                              <div className="flex items-center justify-center gap-2">
+                                <Checkbox
+                                  checked={isChecked}
+                                  disabled
+                                  className="h-4 w-4 data-[state=checked]:bg-green-600"
+                                />
+                                <span
+                                  className={`font-medium ${
+                                    isChecked
+                                      ? "text-green-600"
+                                      : hasPaidNewInstallment
+                                      ? "text-blue-600"
+                                      : "text-gray-500"
+                                  }`}
+                                >
+                                  ₹{totalInstallmentDisplay?.toLocaleString()}
+                                </span>
+                              </div>
+                              {carriedForwardInstallment > 0 &&
+                                row.installment !==
+                                  carriedForwardInstallment && (
+                                  <span className="text-[10px] text-gray-500 mt-1">
+                                    (Prev: ₹
+                                    {carriedForwardInstallment.toLocaleString()}
+                                    )
+                                  </span>
+                                )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center text-xs md:text-sm font-semibold">
+                            {carriedForwardAmount > 0 ? (
+                              <div className="flex flex-col items-center">
+                                <span>
+                                  ₹{carriedForwardAmount.toLocaleString()}
+                                </span>
+                                {row.amount > 0 &&
+                                  row.amount !== carriedForwardAmount && (
+                                    <span className="text-[10px] text-gray-500">
+                                      (Updated: ₹{row.amount?.toLocaleString()})
+                                    </span>
+                                  )}
+                              </div>
+                            ) : row.amount > 0 ? (
+                              `₹${row.amount?.toLocaleString()}`
+                            ) : (
+                              "-"
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center text-xs md:text-sm">
+                            {row?.interest > 0 ? `₹${row?.interest}` : "-"}
+                          </TableCell>
+                          <TableCell className="text-center text-xs md:text-sm">
+                            {row?.fine > 0 ? `₹${row?.fine}` : "-"}
+                          </TableCell>
+                          <TableCell className="text-center text-xs md:text-sm">
+                            {row?.withdrawal > 0
+                              ? `₹${row?.withdrawal.toLocaleString()}`
+                              : "-"}
+                          </TableCell>
+                          <TableCell className="text-center text-xs md:text-sm">
+                            {row?.newWithdrawal > 0
+                              ? `₹${row?.newWithdrawal.toLocaleString()}`
+                              : "-"}
+                          </TableCell>
+                          <TableCell className="text-center font-medium text-xs md:text-sm">
+                            {isChecked ? (
+                              `₹${(
+                                row.installment + row.interest
+                              ).toLocaleString()}`
+                            ) : (
+                              <span className="text-gray-400">₹0</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRowAction(row)}
+                              disabled={updatingMemberId === row.subUser._id}
+                              className="text-xs h-8 px-2 md:text-sm md:h-9 md:px-3"
+                            >
+                              {updatingMemberId === row.subUser._id ? (
+                                <Loader
+                                  size="sm"
+                                  variant="primary"
+                                  type="dots"
+                                  className="!gap-0"
+                                  show
+                                />
+                              ) : (
+                                "Update"
+                              )}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </div>
         </CardContent>
       </Card>
 
       {memberData.length > 0 && (
-        <div className="mt-8">
-          <h3 className="text-lg font-semibold mb-4">Summary Calculations</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="mt-6 md:mt-8">
+          <h3 className="text-lg font-semibold mb-4">
+            Summary Calculations (Month)
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card className="bg-blue-50 border-blue-200">
-              <CardContent className="p-4">
+              <CardContent className="p-3 md:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-blue-600">કુલ હપ્તા</p>
-                    <p className="text-2xl font-bold text-blue-800">
+                    <p className="text-xs md:text-sm font-medium text-blue-600">
+                      કુલ હપ્તા
+                    </p>
+                    <p className="text-lg md:text-2xl font-bold text-blue-800">
                       ₹{calculations.totalInstallments.toLocaleString()}
                     </p>
                   </div>
-                  <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
+                  <div className="h-6 w-6 md:h-8 md:w-8 bg-blue-100 rounded-full flex items-center justify-center">
                     <svg
-                      className="h-4 w-4 text-blue-600"
+                      className="h-3 w-3 md:h-4 md:w-4 text-blue-600"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -1342,19 +1836,19 @@ export default function AnalyticsPage() {
             </Card>
 
             <Card className="bg-green-50 border-green-200">
-              <CardContent className="p-4">
+              <CardContent className="p-3 md:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-green-600">
+                    <p className="text-xs md:text-sm font-medium text-green-600">
                       કુલ બ્યાજ
                     </p>
-                    <p className="text-2xl font-bold text-green-800">
+                    <p className="text-lg md:text-2xl font-bold text-green-800">
                       ₹{calculations.totalInterest.toLocaleString()}
                     </p>
                   </div>
-                  <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
+                  <div className="h-6 w-6 md:h-8 md:w-8 bg-green-100 rounded-full flex items-center justify-center">
                     <svg
-                      className="h-4 w-4 text-green-600"
+                      className="h-3 w-3 md:h-4 md:w-4 text-green-600"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -1372,19 +1866,19 @@ export default function AnalyticsPage() {
             </Card>
 
             <Card className="bg-orange-50 border-orange-200">
-              <CardContent className="p-4">
+              <CardContent className="p-3 md:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-orange-600">
+                    <p className="text-xs md:text-sm font-medium text-orange-600">
                       કુલ ઉપાડ જમા
                     </p>
-                    <p className="text-2xl font-bold text-orange-800">
+                    <p className="text-lg md:text-2xl font-bold text-orange-800">
                       ₹{calculations.totalWithdrawals.toLocaleString()}
                     </p>
                   </div>
-                  <div className="h-8 w-8 bg-orange-100 rounded-full flex items-center justify-center">
+                  <div className="h-6 w-6 md:h-8 md:w-8 bg-orange-100 rounded-full flex items-center justify-center">
                     <svg
-                      className="h-4 w-4 text-orange-600"
+                      className="h-3 w-3 md:h-4 md:w-4 text-orange-600"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -1402,17 +1896,19 @@ export default function AnalyticsPage() {
             </Card>
 
             <Card className="bg-purple-50 border-purple-200">
-              <CardContent className="p-4">
+              <CardContent className="p-3 md:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-purple-600">કુલ રકમ</p>
-                    <p className="text-2xl font-bold text-purple-800">
+                    <p className="text-xs md:text-sm font-medium text-purple-600">
+                      કુલ રકમ
+                    </p>
+                    <p className="text-lg md:text-2xl font-bold text-purple-800">
                       ₹{calculations.totalName.toLocaleString()}
                     </p>
                   </div>
-                  <div className="h-8 w-8 bg-purple-100 rounded-full flex items-center justify-center">
+                  <div className="h-6 w-6 md:h-8 md:w-8 bg-purple-100 rounded-full flex items-center justify-center">
                     <svg
-                      className="h-4 w-4 text-purple-600"
+                      className="h-3 w-3 md:h-4 md:w-4 text-purple-600"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -1429,106 +1925,6 @@ export default function AnalyticsPage() {
               </CardContent>
             </Card>
           </div>
-
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle>Detailed Breakdown</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                    <span className="font-medium">
-                      Total Members ( કુલ સભ્ય ):
-                    </span>
-                    <span className="font-bold">{calculations.totalMembers}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                    <span className="font-medium">
-                      Total Installments ( કુલ હપ્તો ):
-                    </span>
-                    <span className="font-bold">
-                      ₹{calculations.totalInstallments.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                    <span className="font-medium">
-                      Total Interest ( કુલ વ્યાજ ):
-                    </span>
-                    <span className="font-bold">
-                      ₹{calculations.totalInterest.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                    <span className="font-medium">
-                      Total Withdrawals Deposit ( ઉપાડ જમા ):
-                    </span>
-                    <span className="font-bold">
-                      ₹{calculations.totalWithdrawals.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-blue-100 rounded-lg border-2 border-blue-200">
-                    <span className="font-bold text-blue-800">
-                      Total ( કુલ રકમ ):
-                    </span>
-                    <span className="font-bold text-xl text-blue-800">
-                      ₹{calculations.totalName.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                    <span className="font-medium">
-                      New Withdrawals ( નવો ઉપાડ ):
-                    </span>
-                    <span className="font-bold">
-                      ₹{calculations.totalNewWithdrawals.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-green-100 rounded-lg border-2 border-green-200">
-                    <span className="font-bold text-green-800">
-                      Band Silak ( શ્રી બંધ સિલક: )
-                    </span>
-                    <span className="font-bold text-xl text-green-800">
-                      ₹{calculations.bandSilak.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-blue-100 rounded-lg border-2 border-blue-200">
-                    <span className="font-bold text-blue-800">
-                      Grand Total ( કુલ ધીરાણા ):
-                    </span>
-                    <span className="font-bold text-xl text-blue-800">
-                      ₹ {calculations.grandTotal.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-red-100 rounded-lg border-2 border-red-200 mt-6">
-                <span className="font-bold text-red-800">
-                  Mandal&apos;s cash ( મંડળની રોકડ ):
-                </span>
-                <span className="font-bold text-xl text-red-800">
-                  ₹ {calculations.Mandalcash.toLocaleString()}
-                </span>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-green-100 rounded-lg border-2 border-green-200 mt-6">
-                <span className="font-bold text-green-800">
-                  per person ( વ્યક્તિ દીઠ ):
-                </span>
-                <span className="font-bold text-xl text-green-800">
-                  ₹ {calculations.perPerson.toLocaleString()}
-                </span>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-green-100 rounded-lg border-2 border-green-200 mt-6">
-                <span className="font-bold text-green-800">
-                  Interest per person ( વ્યક્તિ દીઠ વ્યાજ):
-                </span>
-                <span className="font-bold text-xl text-green-800">
-                  ₹ {calculations.interestPerPerson.toLocaleString()}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       )}
     </>

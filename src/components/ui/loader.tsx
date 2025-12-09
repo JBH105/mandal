@@ -7,7 +7,7 @@ const cn = (...args: Array<string | false | undefined | null>) =>
 
 type Size = "sm" | "md" | "lg" | "xl";
 type Variant = "primary" | "secondary" | "success" | "warning" | "destructive" | "white" | "black";
-type LoaderType = "spinner" | "dots" | "ring";
+type LoaderType = "spinner" | "dots" | "ring" | "sit-n-spin";
 
 interface SpinnerProps extends React.HTMLAttributes<HTMLDivElement> {
   size?: Size;
@@ -73,6 +73,109 @@ const variantTextColor: Record<Variant, string> = {
   black: "text-black",
 };
 
+const SitNSpinIcon = ({ size = "md", variant = "primary" }: { size?: Size; variant?: Variant }) => {
+  const sizeMap: Record<Size, number> = { sm: 20, md: 32, lg: 48, xl: 64 };
+  const iconSize = sizeMap[size];
+  const color = variant === "primary" ? "#3b82f6" : 
+                variant === "secondary" ? "#6b7280" : 
+                variant === "success" ? "#10b981" : 
+                variant === "warning" ? "#f59e0b" : 
+                variant === "destructive" ? "#ef4444" : 
+                variant === "white" ? "#ffffff" : "#000000";
+
+  return (
+    <svg 
+      width={iconSize} 
+      height={iconSize} 
+      viewBox="0 0 100 100" 
+      className="animate-spin"
+      aria-hidden="true"
+    >
+      {/* Base circle */}
+      <circle cx="50" cy="50" r="45" stroke={color} strokeWidth="3" fill="none" strokeDasharray="5,5" />
+      
+      {/* Chair/Seat */}
+      <g transform="translate(50, 50) rotate(0)">
+        <path 
+          d="M -25,-10 L 25,-10 L 20,15 L -20,15 Z" 
+          fill={color} 
+          fillOpacity="0.3"
+          stroke={color}
+          strokeWidth="2"
+          className="origin-center animate-pulse"
+        />
+        
+        {/* Chair back */}
+        <rect 
+          x="-20" 
+          y="15" 
+          width="40" 
+          height="10" 
+          fill={color} 
+          fillOpacity="0.4"
+          stroke={color}
+          strokeWidth="1"
+          rx="2"
+        />
+        
+        {/* Chair legs */}
+        <line x1="-15" y1="25" x2="-15" y2="40" stroke={color} strokeWidth="3" />
+        <line x1="15" y1="25" x2="15" y2="40" stroke={color} strokeWidth="3" />
+        
+        {/* Person sitting (simple stick figure) */}
+        <circle cx="0" cy="-5" r="6" fill={color} fillOpacity="0.8" />
+        <line x1="0" y1="1" x2="0" y2="15" stroke={color} strokeWidth="3" />
+        <line x1="-10" y1="-10" x2="0" y2="-5" stroke={color} strokeWidth="2" />
+        <line x1="10" y1="-10" x2="0" y2="-5" stroke={color} strokeWidth="2" />
+        <line x1="-8" y1="25" x2="0" y2="15" stroke={color} strokeWidth="2" />
+        <line x1="8" y1="25" x2="0" y2="15" stroke={color} strokeWidth="2" />
+      </g>
+      
+      {/* Rotating decorative elements */}
+      <circle cx="50" cy="50" r="35" stroke={color} strokeWidth="1" fill="none" opacity="0.3">
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from="0 50 50"
+          to="360 50 50"
+          dur="3s"
+          repeatCount="indefinite"
+        />
+      </circle>
+      
+      {/* Sparkles/effects */}
+      <g>
+        <circle cx="80" cy="50" r="3" fill={color} opacity="0.6">
+          <animate 
+            attributeName="opacity" 
+            values="0.3;0.8;0.3" 
+            dur="1.5s" 
+            repeatCount="indefinite"
+          />
+        </circle>
+        <circle cx="20" cy="50" r="3" fill={color} opacity="0.6">
+          <animate 
+            attributeName="opacity" 
+            values="0.3;0.8;0.3" 
+            dur="1.5s" 
+            repeatCount="indefinite"
+            begin="0.5s"
+          />
+        </circle>
+        <circle cx="50" cy="20" r="3" fill={color} opacity="0.6">
+          <animate 
+            attributeName="opacity" 
+            values="0.3;0.8;0.3" 
+            dur="1.5s" 
+            repeatCount="indefinite"
+            begin="1s"
+          />
+        </circle>
+      </g>
+    </svg>
+  );
+};
+
 export const Loader: React.FC<LoaderProps> = ({
   size = "md",
   variant = "primary",
@@ -110,7 +213,30 @@ export const Loader: React.FC<LoaderProps> = ({
     <div aria-hidden className={cn("rounded-full animate-spin", sizeClasses[size], borderClasses[size], colorClass ?? variantBorderColor[variant], "border-t-transparent")} />
   );
 
-  const loaderInner = type === "dots" ? renderDots() : type === "ring" ? renderRing() : renderSpinner();
+  const renderSitNSpin = () => (
+    <div className="flex flex-col items-center justify-center" aria-hidden>
+      <SitNSpinIcon size={size} variant={variant} />
+      {fullPage && (
+        <div className="mt-4 flex gap-2">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              style={{ animationDelay: `${i * 0.2}s` }}
+              className={cn(
+                "w-2 h-2 rounded-full animate-bounce",
+                colorClass ?? variantBgColor[variant]
+              )}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const loaderInner = type === "dots" ? renderDots() : 
+                     type === "ring" ? renderRing() : 
+                     type === "sit-n-spin" ? renderSitNSpin() : 
+                     renderSpinner();
 
   const content = (
     <div className={cn("flex flex-col items-center gap-3", className)} role="status" aria-label={accessibleLabel}>
@@ -121,8 +247,15 @@ export const Loader: React.FC<LoaderProps> = ({
 
   if (fullPage) {
     return (
-      <div className="fixed inset-0 bg-black/30 backdrop-blur-md z-50 flex items-center justify-center">
-        {content}
+      <div className="fixed inset-0 bg-gradient-to-br from-gray-50 to-gray-100 backdrop-blur-sm z-50 flex items-center justify-center">
+        <div className="bg-white/80 backdrop-blur-md rounded-2xl shadow-2xl p-8 border border-gray-200/50">
+          {content}
+          <div className="mt-6 text-center">
+            <p className="text-sm text-gray-500 font-medium animate-pulse">
+              Taking a spin... just a moment!
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -173,6 +306,54 @@ export const LoadingWrapper: React.FC<{
   return <div className={className}>{children}</div>;
 };
 
+// New: Page Loading Wrapper specifically for page transitions
+export const PageLoadingWrapper: React.FC<{
+  isLoading: boolean;
+  children: React.ReactNode;
+  message?: string;
+  variant?: Variant;
+}> = ({ isLoading, children, message = "Getting things ready...", variant = "primary" }) => {
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader 
+          show={true} 
+          fullPage={true} 
+          type="sit-n-spin" 
+          variant={variant}
+          text={message}
+        />
+      </div>
+    );
+  }
+  return <>{children}</>;
+};
+
+// New: Route transition loader
+export const RouteTransitionLoader: React.FC<{
+  isTransitioning: boolean;
+  children: React.ReactNode;
+}> = ({ isTransitioning, children }) => {
+  return (
+    <>
+      {isTransitioning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/90 backdrop-blur-sm">
+          <Loader 
+            show={true} 
+            type="sit-n-spin" 
+            variant="primary"
+            text="Moving to a new seat..."
+            fullPage={false}
+            size="lg"
+          />
+        </div>
+      )}
+      {children}
+    </>
+  );
+};
+
+// Updated skeleton components with chair theme
 type SkeletonProps = {
   className?: string;
   rounded?: boolean;
@@ -181,41 +362,56 @@ type SkeletonProps = {
 };
 
 export const SkeletonBox: React.FC<SkeletonProps> = ({ className = "", rounded = true, width = "w-full", height = "h-4" }) => {
-  return <div className={cn(width, height, rounded ? "rounded-md" : "", "bg-gray-200/60 relative overflow-hidden", className)}><div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent opacity-30 animate-shimmer" /></div>;
+  return (
+    <div className={cn(width, height, rounded ? "rounded-md" : "", "bg-gradient-to-r from-gray-100 to-gray-200 relative overflow-hidden", className)}>
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent opacity-50 animate-shimmer" />
+    </div>
+  );
 };
 
 export const SkeletonCard: React.FC<{ className?: string }> = ({ className = "" }) => {
   return (
-    <div className={cn("p-4 rounded-lg bg-white/60 border border-gray-200 relative overflow-hidden", className)}>
-      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent opacity-30 animate-shimmer" />
+    <div className={cn("p-4 rounded-lg bg-gradient-to-br from-white to-gray-50 border border-gray-200/50 relative overflow-hidden shadow-sm", className)}>
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-40 animate-shimmer" />
       <div className="flex items-center justify-between mb-3">
-        <div className="w-28 h-4 bg-gray-200/60 rounded" />
-        <div className="w-6 h-6 bg-gray-200/60 rounded" />
+        <div className="w-28 h-4 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
+        <div className="w-6 h-6 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
       </div>
       <div className="space-y-2">
-        <div className="w-16 h-8 bg-gray-200/60 rounded" />
-        <div className="w-24 h-3 bg-gray-200/60 rounded" />
+        <div className="w-16 h-8 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
+        <div className="w-24 h-3 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
       </div>
     </div>
   );
 };
 
-export const SkeletonTable: React.FC<{ rows?: number; cols?: number; className?: string }> = ({ rows = 4, cols = 6, className = "" }) => {
-  const colWidths = Array.from({ length: cols }).map((_, idx) => (idx === 0 ? "w-12" : idx === 1 ? "w-12" : "w-[150px]"));
+// Update your loader file - modify the SkeletonTable component to accept custom column widths:
+export const SkeletonTable: React.FC<{ 
+  rows?: number; 
+  cols?: number; 
+  className?: string;
+  colWidths?: string[];
+}> = ({ rows = 4, cols = 6, className = "", colWidths = [] }) => {
+  // Use provided colWidths or default ones
+  const defaultColWidths = Array.from({ length: cols }).map((_, idx) => 
+    idx === 0 ? "w-12" : idx === 1 ? "w-12" : "w-[150px]"
+  );
+  const widths = colWidths.length > 0 ? colWidths : defaultColWidths;
+  
   return (
     <div className={cn("w-full overflow-x-auto relative", className)}>
-      <div className="min-w-[800px] border border-gray-100 rounded-md p-4 bg-white/40 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent opacity-30 animate-shimmer" />
-        <div className="grid grid-cols-6 gap-4 mb-3">
-          {colWidths.map((w, i) => (
-            <div key={i} className={cn(w, "h-4 bg-gray-200/60 rounded")} />
+      <div className="min-w-[800px] border border-gray-200/50 rounded-lg p-4 bg-gradient-to-b from-white to-gray-50/50 relative overflow-hidden shadow-sm">
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-40 animate-shimmer" />
+        <div className="grid grid-cols-7 gap-4 mb-3">
+          {widths.map((w, i) => (
+            <div key={i} className={cn(w, "h-4 bg-gradient-to-r from-gray-200 to-gray-300 rounded")} />
           ))}
         </div>
         <div className="space-y-3">
           {Array.from({ length: rows }).map((_, r) => (
             <div key={r} className="flex items-center gap-4">
-              {colWidths.map((w, c) => (
-                <div key={c} className={cn(w, "h-6 bg-gray-200/60 rounded")} />
+              {widths.map((w, c) => (
+                <div key={c} className={cn(w, "h-6 bg-gradient-to-r from-gray-200 to-gray-300 rounded")} />
               ))}
             </div>
           ))}
@@ -229,7 +425,10 @@ export const SkeletonTableRow: React.FC<{ cols?: number }> = ({ cols = 6 }) => {
   return (
     <div className="flex items-center gap-4">
       {Array.from({ length: cols }).map((_, i) => (
-        <div key={i} className={cn(i === 0 ? "w-12" : i === 1 ? "w-12" : "w-[150px]", "h-6 bg-gray-200/60 rounded")} />
+        <div key={i} className={cn(
+          i === 0 ? "w-12" : i === 1 ? "w-12" : "w-[150px]", 
+          "h-6 bg-gradient-to-r from-gray-200 to-gray-300 rounded"
+        )} />
       ))}
     </div>
   );
@@ -237,20 +436,20 @@ export const SkeletonTableRow: React.FC<{ cols?: number }> = ({ cols = 6 }) => {
 
 export const LoginSkeleton: React.FC<{ className?: string }> = ({ className = "" }) => {
   return (
-    <div className={cn("min-h-screen flex items-center justify-center bg-gray-50 p-6 relative overflow-hidden", className)}>
-      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent opacity-30 animate-shimmer" />
-      <div className="w-full max-w-md bg-white rounded-xl p-6 shadow-lg">
+    <div className={cn("min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-6 relative overflow-hidden", className)}>
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-40 animate-shimmer" />
+      <div className="w-full max-w-md bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-xl border border-gray-200/50">
         <div className="mb-6">
-          <div className="h-10 w-32 bg-gray-200/60 rounded mb-6" />
+          <div className="h-10 w-32 bg-gradient-to-r from-gray-200 to-gray-300 rounded mb-6" />
           <div className="space-y-3">
-            <div className="h-4 bg-gray-200/60 rounded" />
-            <div className="h-12 bg-gray-200/60 rounded" />
-            <div className="h-4 bg-gray-200/60 rounded" />
-            <div className="h-12 bg-gray-200/60 rounded" />
+            <div className="h-4 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
+            <div className="h-12 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
+            <div className="h-4 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
+            <div className="h-12 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
           </div>
         </div>
         <div className="mt-6">
-          <div className="h-10 bg-gray-200/60 rounded" />
+          <div className="h-10 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
         </div>
       </div>
     </div>
@@ -297,7 +496,7 @@ export const ButtonWithProgress: React.FC<ButtonWithProgressProps> = ({ progress
       disabled={loading || props.disabled}
       className={cn("inline-flex items-center justify-center gap-2 px-3 py-2 rounded-md transition-all disabled:opacity-60 relative overflow-hidden", variantClass, className)}
     >
-      <div className="absolute left-0 top-0 h-full bg-white/10" style={{ width: `${safeProgress}%`, transition: "width 300ms ease" }} />
+      <div className="absolute left-0 top-0 h-full bg-white/20" style={{ width: `${safeProgress}%`, transition: "width 300ms ease" }} />
       {loading ? (
         <div className="flex items-center gap-2 z-10">
           <Spinner size="sm" colorClass="border-white" />
@@ -321,3 +520,22 @@ const styleTag = `
 export default Spinner;
 
 export const Styles = () => <style dangerouslySetInnerHTML={{ __html: styleTag }} />;
+
+// New: Hook for page loading state
+export const usePageLoader = (initialState = false) => {
+  const [isLoading, setIsLoading] = React.useState(initialState);
+  
+  const startLoading = (message?: string) => {
+    setIsLoading(true);
+    return () => setIsLoading(false);
+  };
+  
+  const stopLoading = () => setIsLoading(false);
+  
+  return {
+    isLoading,
+    setIsLoading,
+    startLoading,
+    stopLoading,
+  };
+};

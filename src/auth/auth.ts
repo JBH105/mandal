@@ -101,3 +101,19 @@ export const getAvailableSubUsersApi = async (month: string): Promise<SubUser[]>
   const response = await api.get(`/memberData/availableSubUsers?month=${month}`);
   return response.data as SubUser[];
 };
+
+export const updateMandalInstallmentApi = async (
+  mandalId: string,
+  installment: number,
+  selectedMonth: string
+) => {
+  const response = await api.put(`/mandal/installment`, {
+    mandalId,
+    installment,
+    selectedMonth,
+  });
+
+  return response.data;
+};
+
+

@@ -43,7 +43,7 @@ const getUserFromStorage = (): Record<string, unknown> | null => {
 
 export function useUserProfile() {
   const { mandalUser, isLoading: mandalLoading } = useMandalUser();
-  console.log("🚀 ~ useUserProfile ~ mandalUser:", mandalUser);
+  // console.log("🚀 ~ useUserProfile ~ mandalUser:", mandalUser);
   
   const [userRole, setUserRole] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
