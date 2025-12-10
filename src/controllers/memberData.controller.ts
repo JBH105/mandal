@@ -124,7 +124,6 @@ export async function getMemberData(request: AuthenticatedRequest) {
 
 export async function initializeMonthData(request: AuthenticatedRequest) {
   try {
-    // Apply auth middleware (mandal role required)
     const authResult = await authMiddleware(request, 'mandal');
     if (authResult) return authResult;
 
@@ -137,7 +136,6 @@ export async function initializeMonthData(request: AuthenticatedRequest) {
     }
 
     const body = await request.json();
-    // Validate input
     const { month } = validateMonthInitialization(body);
 
     const prevMonth = getPreviousMonth(month);
@@ -145,11 +143,10 @@ export async function initializeMonthData(request: AuthenticatedRequest) {
     // Fetch all sub-users for the mandal
     const subUsers = await MandalSubUser.find({ mandal: mandal._id });
 
-    // Fetch previous month data
+    // Fetch previous month data - READ ONLY, don't modify!
     const prevData = await MemberData.find({ mandal: mandal._id, month: prevMonth });
     const prevDataMap = new Map(prevData.map(d => [d.subUser.toString(), d]));
 
-    // Initialize member data for each sub-user, copying from previous month if available
     const memberDataPromises = subUsers.map(async (subUser) => {
       const subUserId = subUser._id.toString();
 
@@ -180,13 +177,13 @@ export async function initializeMonthData(request: AuthenticatedRequest) {
       if (prev) {
         newData = {
           ...newData,
-          installment: prev.installment,
-          amount: prev.amount + prev.newWithdrawal,
+          installment: prev.installment, // Only carry forward installment
+          amount: 0, // DON'T add prev.amount + prev.newWithdrawal
           interest: 0,
           fine: 0,
           withdrawal: 0,
           newWithdrawal: 0,
-          total: prev.installment + 0,
+          total: 0,
         };
       }
 

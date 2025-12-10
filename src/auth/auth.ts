@@ -102,15 +102,16 @@ export const getAvailableSubUsersApi = async (month: string): Promise<SubUser[]>
   return response.data as SubUser[];
 };
 
+// Updated function with isUpdate parameter
 export const updateMandalInstallmentApi = async (
   installment: number,
-  selectedMonth: string
+  selectedMonth: string,
+  isUpdate: boolean = false
 ) => {
   const response = await api.put("/mandal/installment", {
     installment,
     selectedMonth,
-    // mandalId remove કરો - token માંથી લેશે
+    isUpdate
   });
   return response.data;
 };
-

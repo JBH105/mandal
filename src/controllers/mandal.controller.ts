@@ -165,7 +165,7 @@ export async function updateMandalInstallment(request: AuthenticatedRequest) {
     const mandalId = request.decoded?.id;
 
     const body = await request.json();
-    const { installment, selectedMonth } = body;
+    const { installment, selectedMonth, isUpdate = false } = body;
 
     if (!mandalId || installment == null || !selectedMonth) {
       return NextResponse.json(
@@ -174,55 +174,95 @@ export async function updateMandalInstallment(request: AuthenticatedRequest) {
       );
     }
 
-    // Update mandal.installment
+    // 1. Update mandal's default installment
     const mandal = await Mandal.findById(mandalId);
     if (!mandal)
       return NextResponse.json({ error: "Mandal not found" }, { status: 404 });
 
+    const previousInstallment = mandal.setInstallment || 0;
     mandal.setInstallment = installment;
     await mandal.save();
 
-    // Extract year + month from selected month
-    const [selectedYear, selectedMonthNum] = selectedMonth.split("-").map(Number);
+    // 2. Get all unique months sorted chronologically
+    const uniqueMonths = await MemberData.distinct("month", { mandal: mandalId });
+    
+    // Sort months from oldest to newest
+    uniqueMonths.sort((a, b) => {
+      const dateA = new Date(a + "-01");
+      const dateB = new Date(b + "-01");
+      return dateA.getTime() - dateB.getTime();
+    });
 
-    // Fetch all MemberData months for this mandal
-    const allMonths = await MemberData.find({ mandal: mandalId });
-
-    const monthsToUpdate: string[] = [];
-
-    for (const record of allMonths) {
-      const [year, monthNum] = record.month.split("-").map(Number);
-
-      // SAME YEAR + FUTURE MONTHS ONLY
-      if (
-        year === selectedYear && 
-        monthNum >= selectedMonthNum &&
-        record.installment === 0
-      ) {
-        monthsToUpdate.push(record.month);
-      }
+    // Find selected month index
+    const selectedIndex = uniqueMonths.indexOf(selectedMonth);
+    
+    if (selectedIndex === -1) {
+      return NextResponse.json(
+        { error: "Selected month not found" },
+        { status: 400 }
+      );
     }
 
-    // Update only those months
-    await MemberData.updateMany(
-      {
-        mandal: mandalId,
-        month: { $in: monthsToUpdate },
-        installment: 0
-      },
-      {
-        $set: { installment }
-      }
-    );
+    // Get months to update: selected month and ALL FUTURE months
+    const monthsToUpdate = uniqueMonths.slice(selectedIndex);
+    console.log("Months to update:", monthsToUpdate);
+    console.log("Previous installment:", previousInstallment);
+    console.log("New installment:", installment);
 
-    return NextResponse.json(
-      {
-        message: "Installment applied to same-year future months",
-        updatedMonths: monthsToUpdate,
-        setInstallment: installment
-      },
-      { status: 200 }
-    );
+    if (!isUpdate) {
+      // FIRST TIME SETTING HAPTO
+      // Update only FUTURE months where installment is 0
+      const updateResult = await MemberData.updateMany(
+        {
+          mandal: mandalId,
+          month: { $in: monthsToUpdate },
+          installment: 0 // Only update records with 0 installment
+        },
+        {
+          $set: { installment }
+        }
+      );
+
+      return NextResponse.json(
+        {
+          message: "Hapto set for the first time. Applied to SELECTED month and FUTURE months where installment was 0.",
+          updatedMonths: monthsToUpdate,
+          updatedCount: updateResult.modifiedCount,
+          setInstallment: installment,
+          isFirstTime: true
+        },
+        { status: 200 }
+      );
+    } else {
+      // UPDATING EXISTING HAPTO
+      // IMPORTANT: Update only records where installment equals mandal's OLD setInstallment
+      // OR where installment is 0
+      const updateResult = await MemberData.updateMany(
+        {
+          mandal: mandalId,
+          month: { $in: monthsToUpdate },
+          $or: [
+            { installment: previousInstallment },
+            { installment: 0 }
+          ]
+        },
+        {
+          $set: { installment }
+        }
+      );
+
+      return NextResponse.json(
+        {
+          message: "Hapto updated. Applied to selected month and future months.",
+          updatedMonths: monthsToUpdate,
+          updatedCount: updateResult.modifiedCount,
+          previousInstallment,
+          setInstallment: installment,
+          isUpdate: true
+        },
+        { status: 200 }
+      );
+    }
 
   } catch (error) {
     console.error("Installment update error:", error);
