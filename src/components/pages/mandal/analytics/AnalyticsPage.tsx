@@ -31,10 +31,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Calendar } from "lucide-react";
+import { Plus, Calendar, Search } from "lucide-react";
 import { HiOutlineUserGroup } from "react-icons/hi";
-import { BiDollar } from "react-icons/bi";
-import { HiArrowTrendingUp, HiArrowTrendingDown } from "react-icons/hi2";
 
 import {
   getMandals,
@@ -58,22 +56,9 @@ import {
 } from "./validation";
 import { AxiosError } from "axios";
 import { SkeletonCard, SkeletonTable, Loader } from "@/components/ui/loader";
-
-// interface Calculations {
-//   totalInstallments: number;
-//   totalAmount: number;
-//   totalInterest: number;
-//   totalFines: number;
-//   totalWithdrawals: number;
-//   totalNewWithdrawals: number;
-//   grandTotal: number;
-//   totalMembers: number;
-//   totalName: number;
-//   bandSilak: number;
-//   Mandalcash: number;
-//   interestPerPerson: number;
-//   perPerson: number;
-// }
+import { MobileFooter } from "@/components/ui/mobile-footer";
+import { IoPersonAdd } from "react-icons/io5";
+import { TbTransactionRupee } from "react-icons/tb";
 
 interface FormData {
   subUserId: string;
@@ -103,6 +88,7 @@ export default function AnalyticsPage() {
 
   const [subUsers, setSubUsers] = useState<SubUser[]>([]);
   const [memberData, setMemberData] = useState<MemberData[]>([]);
+  const [filteredMemberData, setFilteredMemberData] = useState<MemberData[]>([]);
   const [months, setMonths] = useState<string[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<string>("");
 
@@ -159,6 +145,8 @@ export default function AnalyticsPage() {
   const [isInstallmentPaid, setIsInstallmentPaid] = useState<boolean>(true);
   const [isHaptoSet, setIsHaptoSet] = useState<boolean>(false);
 
+  const [searchQuery, setSearchQuery] = useState<string>("");
+
   const [manualUpdateStatus, setManualUpdateStatus] = useState<
     Record<string, boolean>
   >(() => {
@@ -194,6 +182,20 @@ export default function AnalyticsPage() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Filter member data based on search query
+  useEffect(() => {
+    if (searchQuery.trim() === "") {
+      setFilteredMemberData(memberData);
+    } else {
+      const filtered = memberData.filter((member) =>
+        member.subUser.subUserName
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase())
+      );
+      setFilteredMemberData(filtered);
+    }
+  }, [searchQuery, memberData]);
+
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -207,7 +209,7 @@ export default function AnalyticsPage() {
           const currentMandalId = currentMandal._id;
           setMandalId(currentMandalId);
 
-          const backendInstallment = (currentMandal ).setInstallment || 0;
+          const backendInstallment = currentMandal.setInstallment || 0;
           setMandalMonthlyInstallment(backendInstallment);
           setIsHaptoSet(backendInstallment > 0);
           setHaptoLabelValue(
@@ -221,11 +223,9 @@ export default function AnalyticsPage() {
 
           setSubUsers(users);
 
-          // Check if mandal has any months
           const validMonths = Array.isArray(allMonths) ? allMonths : [];
 
           if (validMonths.length > 0) {
-            // Existing months found
             const sortedMonths = [...validMonths].sort((a, b) => {
               const dateA = new Date(a + "-01");
               const dateB = new Date(b + "-01");
@@ -249,6 +249,7 @@ export default function AnalyticsPage() {
             if (defaultMonth) {
               const data: MemberData[] = await getMemberDataApi(defaultMonth);
               setMemberData(data);
+              setFilteredMemberData(data);
 
               const currentMonthIndex = sortedMonths.indexOf(defaultMonth);
               if (currentMonthIndex > 0) {
@@ -262,13 +263,12 @@ export default function AnalyticsPage() {
               setHasDataLoaded(true);
             }
           } else {
-            // No months exist - this is a new mandal
             setMonths([]);
             setSelectedMonth("");
             setMemberData([]);
+            setFilteredMemberData([]);
             setHasDataLoaded(true);
 
-            // Show message to add first member
             showSuccessToast(
               "Welcome to your new mandal! Start by adding your first member."
             );
@@ -297,6 +297,7 @@ export default function AnalyticsPage() {
         setIsTableDataLoading(true);
         const data: MemberData[] = await getMemberDataApi(selectedMonth);
         setMemberData(data);
+        setFilteredMemberData(data);
 
         const currentMonthIndex = months.indexOf(selectedMonth);
         if (currentMonthIndex > 0 && months.length > 1) {
@@ -420,6 +421,51 @@ export default function AnalyticsPage() {
     return isManuallyUpdated;
   };
 
+  // Handle checkbox click - toggle installment payment status
+  const handleCheckboxClick = (memberId: string) => {
+    if (!selectedMonth) return;
+
+    const newStatus = !shouldCheckboxBeChecked(memberId);
+    
+    setManualUpdateStatus((prev) => ({
+      ...prev,
+      [`${memberId}_${selectedMonth}`]: newStatus,
+    }));
+
+    // Update selected members array
+    if (newStatus) {
+      setSelectedMembers((prev) => [...prev, memberId]);
+    } else {
+      setSelectedMembers((prev) => prev.filter((id) => id !== memberId));
+    }
+  };
+
+  // Select all checkboxes
+  const handleSelectAll = () => {
+    if (!selectedMonth || filteredMemberData.length === 0) return;
+
+    const allMemberIds = filteredMemberData.map((member) => member.subUser._id);
+    const allChecked = selectedMembers.length === allMemberIds.length;
+
+    const newStatus = { ...manualUpdateStatus };
+    
+    if (!allChecked) {
+      // Select all
+      allMemberIds.forEach((memberId) => {
+        newStatus[`${memberId}_${selectedMonth}`] = true;
+      });
+      setSelectedMembers(allMemberIds);
+    } else {
+      // Deselect all
+      allMemberIds.forEach((memberId) => {
+        newStatus[`${memberId}_${selectedMonth}`] = false;
+      });
+      setSelectedMembers([]);
+    }
+    
+    setManualUpdateStatus(newStatus);
+  };
+
   const getFilteredErrors = () => {
     const allErrors = validateNewMemberForm(newMemberData);
     const filtered: ValidationErrors = {};
@@ -492,21 +538,17 @@ export default function AnalyticsPage() {
       // If no months exist, create the first month based on established date
       if (validMonths.length === 0 && establishedDate) {
         try {
-          // Extract YYYY-MM from established date
           const establishedYear = new Date(establishedDate).getFullYear();
           const establishedMonth = (new Date(establishedDate).getMonth() + 1)
             .toString()
             .padStart(2, "0");
           const firstMonth = `${establishedYear}-${establishedMonth}`;
 
-          // Initialize the first month
           await initializeMonthDataApi(firstMonth);
 
-          // Refresh months list
           allMonths = await getAllMonthsApi();
           validMonths = Array.isArray(allMonths) ? allMonths : [];
 
-          // Sort months
           const sortedMonths = [...validMonths].sort((a, b) => {
             const dateA = new Date(a + "-01");
             const dateB = new Date(b + "-01");
@@ -516,9 +558,9 @@ export default function AnalyticsPage() {
           setMonths(sortedMonths);
           setSelectedMonth(firstMonth);
 
-          // Fetch data for the first month
           const updatedData = await getMemberDataApi(firstMonth);
           setMemberData(updatedData);
+          setFilteredMemberData(updatedData);
 
           showSuccessToast(
             `First month ${firstMonth} created based on mandal's established date`
@@ -528,7 +570,6 @@ export default function AnalyticsPage() {
           showErrorToast("Failed to create initial month");
         }
       } else if (validMonths.length > 0) {
-        // For existing months, add the new member to all months
         const initPromises = validMonths.map(async (month) => {
           if (!/^\d{4}-\d{2}$/.test(month)) {
             console.warn(`Invalid month format: ${month}`);
@@ -538,18 +579,16 @@ export default function AnalyticsPage() {
             await initializeMonthDataApi(month);
           } catch (err) {
             console.warn("initializeMonthDataApi failed for month", month, err);
-            // Don't throw; continue with other months
           }
         });
 
         await Promise.all(initPromises);
 
-        // Refresh UI for selected month
         const targetMonth = selectedMonth || validMonths[0];
         const updatedData = await getMemberDataApi(targetMonth);
         setMemberData(updatedData);
+        setFilteredMemberData(updatedData);
       } else {
-        // No established date and no months - use current month as fallback
         const fallbackMonth = getCurrentMonth();
         await initializeMonthDataApi(fallbackMonth);
 
@@ -567,9 +606,9 @@ export default function AnalyticsPage() {
 
         const updatedData = await getMemberDataApi(fallbackMonth);
         setMemberData(updatedData);
+        setFilteredMemberData(updatedData);
       }
 
-      // Clear form and close dialog
       setNewMemberData({ subUserName: "", phoneNumber: "" });
       setErrors({});
       setTouched({ subUserName: false, phoneNumber: false });
@@ -642,6 +681,7 @@ export default function AnalyticsPage() {
 
       const updatedData = await getMemberDataApi(selectedMonth);
       setMemberData(updatedData);
+      setFilteredMemberData(updatedData);
 
       setFormData({
         subUserId: "",
@@ -656,24 +696,27 @@ export default function AnalyticsPage() {
       setSelectedMemberName("");
       setIsAddDialogOpen(false);
     } catch (error: unknown) {
-  console.log("🚀 ~ handleAddData ~ error:", error);
+      console.log("🚀 ~ handleAddData ~ error:", error);
 
-  const err = error as {
-    response?: {
-      data?: {
-        message?: string;
+      const err = error as {
+        response?: {
+          data?: {
+            message?: string;
+          };
+        };
       };
-    };
-  };
 
-  const message = err.response?.data?.message;
+      const message = err.response?.data?.message;
 
-  if (message?.includes("Month is required") || message?.includes("YYYY-MM")) {
-    showErrorToast("ત્રુટિ: મહિનો YYYY-MM ફોર્મેટમાં જરૂરી છે");
-  } else {
-    showErrorToast("Failed to update member data");
-  }
-} finally {
+      if (
+        message?.includes("Month is required") ||
+        message?.includes("YYYY-MM")
+      ) {
+        showErrorToast("ત્રુટિ: મહિનો YYYY-MM ફોર્મેટમાં જરૂરી છે");
+      } else {
+        showErrorToast("Failed to update member data");
+      }
+    } finally {
       setUpdatingMemberId(null);
     }
   };
@@ -698,7 +741,6 @@ export default function AnalyticsPage() {
     try {
       const isFirstTimeSet = !isHaptoSet;
 
-      // Get current month to check
       const now = new Date();
       const currentYear = now.getFullYear();
       const currentMonthNum = now.getMonth() + 1;
@@ -706,13 +748,8 @@ export default function AnalyticsPage() {
         .toString()
         .padStart(2, "0")}`;
 
-      // Check if selected month is current or future month
       const shouldUpdateSelectedMonth =
         selectedMonth && selectedMonth >= currentMonthStr;
-      console.log(
-        "🚀 ~ handleHaptoSet ~ shouldUpdateSelectedMonth:",
-        shouldUpdateSelectedMonth
-      );
 
       const result = await updateMandalInstallmentApi(
         mandalId,
@@ -722,25 +759,18 @@ export default function AnalyticsPage() {
 
       setMandalMonthlyInstallment(result.setInstallment ?? numValue);
       setIsHaptoSet((result.setInstallment ?? numValue) > 0);
-      console.log("🚀 ~ handleHaptoSet ~ setIsHaptoSet:", setIsHaptoSet);
       setHaptoLabelValue(`Hapto: ₹${result.setInstallment ?? numValue}`);
-      console.log(
-        "🚀 ~ handleHaptoSet ~ setHaptoLabelValue:",
-        setHaptoLabelValue
-      );
 
       showSuccessToast(
         `Hapto value set to ₹${result.setInstallment ?? numValue}`
       );
 
-      // Update UI only if selected month is current or future month
       if (selectedMonth && shouldUpdateSelectedMonth) {
         setIsTableDataLoading(true);
         const updatedData = await getMemberDataApi(selectedMonth);
         setMemberData(updatedData);
-        console.log("🚀 ~ handleHaptoSet ~ setMemberData:", setMemberData);
+        setFilteredMemberData(updatedData);
       } else if (selectedMonth && !shouldUpdateSelectedMonth) {
-        // Selected month is previous month - show message
         showSuccessToast(
           `Hapto updated for future months. Current view shows previous month ${selectedMonth}`
         );
@@ -813,6 +843,7 @@ export default function AnalyticsPage() {
 
       const data = await getMemberDataApi(newMonth);
       setMemberData(data);
+      setFilteredMemberData(data);
 
       const prevData =
         months.length > 0 ? await getMemberDataApi(months[0]) : [];
@@ -831,29 +862,26 @@ export default function AnalyticsPage() {
         `મહિનો ${newMonth} બનાવાયો! (Installment for this month will use backend's setInstallment)`
       );
     } catch (error: unknown) {
-  
-  const err = error as {
-    response?: {
-      data?: {
-        message?: string;
+      const err = error as {
+        response?: {
+          data?: {
+            message?: string;
+          };
+        };
       };
-    };
-  };
 
-  const message = err.response?.data?.message;
+      const message = err.response?.data?.message;
 
-  console.error("Error creating new month:", error);
+      console.error("Error creating new month:", error);
 
-  if (message?.includes("Month is required")) {
-    showErrorToast("ત્રુટિ: મહિનો YYYY-MM ફોર્મેટમાં જરૂરી છે");
-  } else if (message) {
-    showErrorToast(`ત્રુટિ: ${message}`);
-  } else {
-    showErrorToast("નવો મહિનો બનાવામાં ત્રુટિ");
-  }
-    }
-
-     finally {
+      if (message?.includes("Month is required")) {
+        showErrorToast("ત્રુટિ: મહિનો YYYY-MM ફોર્મેટમાં જરૂરી છે");
+      } else if (message) {
+        showErrorToast(`ત્રુટિ: ${message}`);
+      } else {
+        showErrorToast("નવો મહિનો બનાવામાં ત્રુટિ");
+      }
+    } finally {
       setIsAddingMonth(false);
       setIsTableLoading(false);
     }
@@ -935,14 +963,15 @@ export default function AnalyticsPage() {
     }
   };
 
+  // Update selected members when member data changes
   useEffect(() => {
-    if (memberData.length > 0 && selectedMonth) {
-      const membersWithCheckedBox = memberData
+    if (filteredMemberData.length > 0 && selectedMonth) {
+      const membersWithCheckedBox = filteredMemberData
         .filter((member) => shouldCheckboxBeChecked(member.subUser._id))
-        .map((member) => member._id);
+        .map((member) => member.subUser._id);
       setSelectedMembers(membersWithCheckedBox);
     }
-  }, [memberData, selectedMonth, manualUpdateStatus]);
+  }, [filteredMemberData, selectedMonth, manualUpdateStatus]);
 
   if (isDashboardLoading && !hasDataLoaded) {
     return (
@@ -980,18 +1009,17 @@ export default function AnalyticsPage() {
         title="Monthly Ledger"
         description="View your monthly ledger, withdrawals, and interest earnings in one place."
       >
-      <div
-  className="
-    grid grid-cols-2 gap-3          
-    sm:grid-cols-2                   
-    lg:flex lg:flex-row lg:flex-wrap lg:items-center lg:gap-3 
-    lg:w-full lg:justify-start       
+        <div
+          className="
+ hidden
+    md:flex md:flex-row md:flex-wrap md:items-center md:gap-3
+    lg:flex lg:flex-row lg:flex-wrap lg:items-center lg:gap-3
+    w-full       
   "
->
-
-          <div className="col-span-2 w-full sm:w-auto lg:w-auto ">
+        >
+          <div>
             <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-              <SelectTrigger className="w-full sm:w-[180px]">
+              <SelectTrigger className="w-full sm:w-[180px] shrink-0">
                 <Calendar className="h-4 w-4 mr-2" />
                 {isAddingMonth ? (
                   <span className="text-gray-400 text-sm">
@@ -1021,11 +1049,11 @@ export default function AnalyticsPage() {
               )}
             </Select>
           </div>
-          <div className="w-full sm:w-auto lg:w-auto">
-
+          <div className="">
             <Button
+              variant="default"
               onClick={handleAddNewMonth}
-              className="w-full sm:w-auto"
+              className="w-full sm:w-auto lg:w-auto shrink-0"
               disabled={isAddingMonth || subUsers.length === 0}
             >
               {isAddingMonth ? (
@@ -1044,15 +1072,17 @@ export default function AnalyticsPage() {
               </span>
             </Button>
           </div>
-           <div className="w-full sm:w-auto lg:w-auto">
-
+          <div className="">
             <div className="sm:ml-auto">
               <Dialog
                 open={isAddMemberDialogOpen}
                 onOpenChange={handleDialogClose}
               >
                 <DialogTrigger asChild>
-                  <Button className="w-full sm:w-auto">
+                  <Button
+                    variant="default"
+                    className="w-full sm:w-auto lg:w-auto shrink-0"
+                  >
                     <Plus className="h-4 w-4" />
                     <span className="ml-2">Add Member</span>
                   </Button>
@@ -1154,15 +1184,17 @@ export default function AnalyticsPage() {
               </Dialog>
             </div>
           </div>
-          <div className="w-full sm:w-auto lg:w-auto">
-
+          <div className="">
             <div className="flex items-center gap-2">
               <Dialog
                 open={isHaptoDialogOpen}
                 onOpenChange={setIsHaptoDialogOpen}
               >
                 <DialogTrigger asChild>
-                  <Button variant="outline" className="w-full sm:w-auto">
+                  <Button
+                    variant="default"
+                    className="w-full sm:w-auto lg:w-auto shrink-0"
+                  >
                     <Plus className="h-4 w-4" />
                     <span className="ml-2">
                       {isHaptoSet ? "Update Hapto" : "Set Hapto"}
@@ -1181,7 +1213,7 @@ export default function AnalyticsPage() {
                         htmlFor="haptoValue"
                         className="text-sm sm:text-base"
                       >
-                        હપ્તো (Installment)
+                        હપ્તો (Installment)
                       </Label>
                       <Input
                         id="haptoValue"
@@ -1217,6 +1249,7 @@ export default function AnalyticsPage() {
                       Cancel
                     </Button>
                     <Button
+                      variant="default"
                       type="button"
                       onClick={handleHaptoSet}
                       className="w-full sm:w-auto"
@@ -1229,301 +1262,241 @@ export default function AnalyticsPage() {
               </Dialog>
             </div>
           </div>
-          <div className="w-full flex justify-start lg:justify-center">
-
-            {haptoLabelValue && (
-              <Badge variant="secondary" className="text-sm">
-                {haptoLabelValue}
-              </Badge>
-            )}
-          </div>
         </div>
       </PageHeader>
-          <div>
 
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-              <DialogTrigger asChild>
-                {/* <Button className="w-full sm:w-auto" disabled={!selectedMonth}>
-                  <Plus className="h-4 w-4" />
-                  <span className="ml-2">Update Member</span>
-                </Button> */}
-              </DialogTrigger>
-              <DialogContent className="max-w-[95vw] sm:max-w-2xl p-4 sm:p-6">
-                <DialogHeader>
-                  <DialogTitle className="text-lg sm:text-xl">
-                    Update Member Data
-                  </DialogTitle>
-                </DialogHeader>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
-                  <div className="space-y-2 sm:col-span-2">
-                    <Label
-                      htmlFor="memberName"
-                      className="text-sm sm:text-base"
-                    >
-                      સભ્યનું નામ (Member Name)
-                    </Label>
-                    <Input
-                      id="memberName"
-                      value={selectedMemberName}
-                      readOnly
-                      className="w-full text-base"
-                      placeholder="Selected member name"
-                    />
-                    <input type="hidden" value={formData.subUserId} />
-                  </div>
-
-                  <div className="space-y-2 sm:col-span-2 flex items-center gap-2">
-                    <Checkbox
-                      id="installmentPaid"
-                      checked={isInstallmentPaid}
-                      onCheckedChange={(checked) =>
-                        setIsInstallmentPaid(checked as boolean)
-                      }
-                    />
-                    <Label
-                      htmlFor="installmentPaid"
-                      className="text-sm sm:text-base"
-                    >
-                      હપ્તો ચૂકવાયો (Installment Paid)
-                    </Label>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="installment"
-                      className="text-sm sm:text-base"
-                    >
-                      હપ્તો (Installment)
-                    </Label>
-                    <Input
-                      id="installment"
-                      type="number"
-                      value={formData.installment}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          installment: e.target.value,
-                        })
-                      }
-                      onFocus={() => handleInputFocus("installment")}
-                      onBlur={() => handleInputBlur("installment")}
-                      placeholder="Enter installment"
-                      className="text-base"
-                      disabled={updatingMemberId !== null}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="amount" className="text-sm sm:text-base">
-                      આ નો ઉ. (Amount)
-                    </Label>
-                    <Input
-                      id="amount"
-                      type="number"
-                      value={formData.amount}
-                      onChange={(e) =>
-                        setFormData({ ...formData, amount: e.target.value })
-                      }
-                      onFocus={() => handleInputFocus("amount")}
-                      onBlur={() => handleInputBlur("amount")}
-                      placeholder="Enter amount"
-                      className="text-base"
-                      disabled={updatingMemberId !== null}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="interest" className="text-sm sm:text-base">
-                      બ્યાજ (Interest)
-                    </Label>
-                    <Input
-                      id="interest"
-                      type="number"
-                      value={formData.interest}
-                      onChange={(e) =>
-                        setFormData({ ...formData, interest: e.target.value })
-                      }
-                      onFocus={() => handleInputFocus("interest")}
-                      onBlur={() => handleInputBlur("interest")}
-                      placeholder="Enter interest"
-                      className="text-base"
-                      disabled={updatingMemberId !== null}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="fine" className="text-sm sm:text-base">
-                      દંડ (Fine)
-                    </Label>
-                    <Input
-                      id="fine"
-                      type="number"
-                      value={formData.fine}
-                      onChange={(e) =>
-                        setFormData({ ...formData, fine: e.target.value })
-                      }
-                      onFocus={() => handleInputFocus("fine")}
-                      onBlur={() => handleInputBlur("fine")}
-                      placeholder="Enter fine"
-                      className="text-base"
-                      disabled={updatingMemberId !== null}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="withdrawal"
-                      className="text-sm sm:text-base"
-                    >
-                      ઉપાડ જમા (Withdrawal)
-                    </Label>
-                    <Input
-                      id="withdrawal"
-                      type="number"
-                      value={formData.withdrawal}
-                      onChange={(e) =>
-                        setFormData({ ...formData, withdrawal: e.target.value })
-                      }
-                      onFocus={() => handleInputFocus("withdrawal")}
-                      onBlur={() => handleInputBlur("withdrawal")}
-                      placeholder="Enter withdrawal"
-                      className="text-base"
-                      disabled={updatingMemberId !== null}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="newWithdrawal"
-                      className="text-sm sm:text-base"
-                    >
-                      નવો ઉપાડ (New Withdrawal)
-                    </Label>
-                    <Input
-                      id="newWithdrawal"
-                      type="number"
-                      value={formData.newWithdrawal}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          newWithdrawal: e.target.value,
-                        })
-                      }
-                      onFocus={() => handleInputFocus("newWithdrawal")}
-                      onBlur={() => handleInputBlur("newWithdrawal")}
-                      placeholder="Enter new withdrawal"
-                      className="text-base"
-                      disabled={updatingMemberId !== null}
-                    />
-                  </div>
-                </div>
-                <div className="flex flex-col sm:flex-row justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    type="button"
-                    onClick={() => {
-                      setFormData({
-                        subUserId: "",
-                        installment: "",
-                        amount: "",
-                        interest: "",
-                        fine: "",
-                        withdrawal: "",
-                        newWithdrawal: "",
-                      });
-                      setIsInstallmentPaid(true);
-                      setSelectedMemberName("");
-                      setUpdatingMemberId(null);
-                      setIsAddDialogOpen(false);
-                    }}
-                    className="w-full sm:w-auto"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={handleAddData}
-                    className="w-full sm:w-auto"
-                    disabled={!selectedMemberName || updatingMemberId !== null}
-                  >
-                    {updatingMemberId ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <Loader
-                          size="sm"
-                          variant="white"
-                          type="dots"
-                          className="!gap-0"
-                          show
-                        />
-                        <span>Updating...</span>
-                      </div>
-                    ) : (
-                      "Update Data"
-                    )}
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Members</CardTitle>
-            <HiOutlineUserGroup className="h-4 w-4" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl md:text-2xl font-bold">
-              {calculations.totalMembers}
-            </div>
-            <p className="text-xs text-green-600">Active members</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Collection
-            </CardTitle>
-            <BiDollar className="h-4 w-4" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl md:text-2xl font-bold">
-              ₹{calculations.totalInstallments.toLocaleString()}
-            </div>
-            <p className="text-xs text-green-600">Total amount</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Interest Earned
-            </CardTitle>
-            <HiArrowTrendingUp className="h-4 w-4" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl md:text-2xl font-bold">
-              ₹{calculations.totalInterest.toLocaleString()}
-            </div>
-            <p className="text-xs text-green-600">Monthly interest</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Withdrawals</CardTitle>
-            <HiArrowTrendingDown className="h-4 w-4" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl md:text-2xl font-bold">
-              ₹{calculations.totalWithdrawals.toLocaleString()}
-            </div>
-            <p className="text-xs text-red-600">Total withdrawals</p>
-          </CardContent>
-        </Card>
+      {/* Search Bar - Only for mobile (sm) */}
+      <div className="md:hidden px-4 mb-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Input
+            type="search"
+            placeholder="Search members..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 w-full"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
 
-      <Card>
+      <div>
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogTrigger asChild></DialogTrigger>
+          <DialogContent className="max-w-[95vw] sm:max-w-2xl p-4 sm:p-6">
+            <DialogHeader>
+              <DialogTitle className="text-lg sm:text-xl">
+                Update Member Data
+              </DialogTitle>
+            </DialogHeader>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="memberName" className="text-sm sm:text-base">
+                  સભ્યનું નામ (Member Name)
+                </Label>
+                <Input
+                  id="memberName"
+                  value={selectedMemberName}
+                  readOnly
+                  className="w-full text-base"
+                  placeholder="Selected member name"
+                />
+                <input type="hidden" value={formData.subUserId} />
+              </div>
+
+              <div className="space-y-2 sm:col-span-2 flex items-center gap-2">
+                <Checkbox
+                  id="installmentPaid"
+                  checked={isInstallmentPaid}
+                  onCheckedChange={(checked) =>
+                    setIsInstallmentPaid(checked as boolean)
+                  }
+                />
+                <Label
+                  htmlFor="installmentPaid"
+                  className="text-sm sm:text-base"
+                >
+                  હપ્તો ચૂકવાયો (Installment Paid)
+                </Label>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="installment" className="text-sm sm:text-base">
+                  હપ્તો (Installment)
+                </Label>
+                <Input
+                  id="installment"
+                  type="number"
+                  value={formData.installment}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      installment: e.target.value,
+                    })
+                  }
+                  onFocus={() => handleInputFocus("installment")}
+                  onBlur={() => handleInputBlur("installment")}
+                  placeholder="Enter installment"
+                  className="text-base"
+                  disabled={updatingMemberId !== null}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="amount" className="text-sm sm:text-base">
+                  આ નો ઉ. (Amount)
+                </Label>
+                <Input
+                  id="amount"
+                  type="number"
+                  value={formData.amount}
+                  onChange={(e) =>
+                    setFormData({ ...formData, amount: e.target.value })
+                  }
+                  onFocus={() => handleInputFocus("amount")}
+                  onBlur={() => handleInputBlur("amount")}
+                  placeholder="Enter amount"
+                  className="text-base"
+                  disabled={updatingMemberId !== null}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="interest" className="text-sm sm:text-base">
+                  બ્યાજ (Interest)
+                </Label>
+                <Input
+                  id="interest"
+                  type="number"
+                  value={formData.interest}
+                  onChange={(e) =>
+                    setFormData({ ...formData, interest: e.target.value })
+                  }
+                  onFocus={() => handleInputFocus("interest")}
+                  onBlur={() => handleInputBlur("interest")}
+                  placeholder="Enter interest"
+                  className="text-base"
+                  disabled={updatingMemberId !== null}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="fine" className="text-sm sm:text-base">
+                  દંડ (Fine)
+                </Label>
+                <Input
+                  id="fine"
+                  type="number"
+                  value={formData.fine}
+                  onChange={(e) =>
+                    setFormData({ ...formData, fine: e.target.value })
+                  }
+                  onFocus={() => handleInputFocus("fine")}
+                  onBlur={() => handleInputBlur("fine")}
+                  placeholder="Enter fine"
+                  className="text-base"
+                  disabled={updatingMemberId !== null}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="withdrawal" className="text-sm sm:text-base">
+                  ઉપાડ જમા (Withdrawal)
+                </Label>
+                <Input
+                  id="withdrawal"
+                  type="number"
+                  value={formData.withdrawal}
+                  onChange={(e) =>
+                    setFormData({ ...formData, withdrawal: e.target.value })
+                  }
+                  onFocus={() => handleInputFocus("withdrawal")}
+                  onBlur={() => handleInputBlur("withdrawal")}
+                  placeholder="Enter withdrawal"
+                  className="text-base"
+                  disabled={updatingMemberId !== null}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="newWithdrawal" className="text-sm sm:text-base">
+                  નવો ઉપાડ (New Withdrawal)
+                </Label>
+                <Input
+                  id="newWithdrawal"
+                  type="number"
+                  value={formData.newWithdrawal}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      newWithdrawal: e.target.value,
+                    })
+                  }
+                  onFocus={() => handleInputFocus("newWithdrawal")}
+                  onBlur={() => handleInputBlur("newWithdrawal")}
+                  placeholder="Enter new withdrawal"
+                  className="text-base"
+                  disabled={updatingMemberId !== null}
+                />
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row justify-end gap-2">
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => {
+                  setFormData({
+                    subUserId: "",
+                    installment: "",
+                    amount: "",
+                    interest: "",
+                    fine: "",
+                    withdrawal: "",
+                    newWithdrawal: "",
+                  });
+                  setIsInstallmentPaid(true);
+                  setSelectedMemberName("");
+                  setUpdatingMemberId(null);
+                  setIsAddDialogOpen(false);
+                }}
+                className="w-full sm:w-auto"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={handleAddData}
+                className="w-full sm:w-auto"
+                disabled={!selectedMemberName || updatingMemberId !== null}
+              >
+                {updatingMemberId ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader
+                      size="sm"
+                      variant="white"
+                      type="dots"
+                      className="!gap-0"
+                      show
+                    />
+                    <span>Updating...</span>
+                  </div>
+                ) : (
+                  "Update Data"
+                )}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <Card className="hidden md:block lg:block">
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
@@ -1558,62 +1531,75 @@ export default function AnalyticsPage() {
                 </Badge>
               </div>
             </div>
-            <Button variant="outline" size="sm" className="w-full sm:w-auto">
-              Export
-            </Button>
+            <div className="flex items-center gap-4">
+              {/* Desktop Search */}
+              <div className="relative hidden md:block">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  type="search"
+                  placeholder="Search members..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 w-48"
+                />
+              </div>
+              <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                Export
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto -mx-4 md:mx-0">
-            <div className="min-w-[800px] px-4 md:px-0">
-              <Table>
-                <TableHeader>
+          <div className="overflow-x-auto w-full">
+            <div className="max-h-[420px] overflow-y-auto">
+              <Table className="min-w-[1000px] w-full">
+                <TableHeader className="sticky top-0 z-20 bg-white">
                   <TableRow className="bg-muted/50">
-                    <TableHead className="w-10 md:w-12 text-center font-semibold">
+                    <TableHead className="sticky top-0 bg-white z-30 text-center">
                       <Checkbox
                         checked={
-                          selectedMembers.length === memberData.length &&
-                          memberData.length > 0
-                            ? true
-                            : selectedMembers.length > 0
-                            ? "indeterminate"
-                            : false
+                          filteredMemberData.length > 0 &&
+                          selectedMembers.length === filteredMemberData.length
                         }
-                        disabled
+                        onCheckedChange={handleSelectAll}
+                        className="border border-gray-600 h-5 w-5 rounded-sm
+                          data-[state=checked]:bg-green-600
+                          data-[state=checked]:border-green-600"
                       />
                     </TableHead>
-                    <TableHead className="w-10 md:w-12 text-center font-semibold text-xs md:text-sm">
+                    <TableHead className="sticky top-0 bg-whitez-30 text-center">
                       ક્રમ નં.
                     </TableHead>
-                    <TableHead className="min-w-[120px] md:min-w-[150px] font-semibold text-xs md:text-sm">
+                    <TableHead className="sticky top-0 bg-white z-30">
                       સભ્યનું નામ
                     </TableHead>
-                    <TableHead className="text-center font-semibold min-w-[120px] md:min-w-[140px] text-xs md:text-sm">
+                    <TableHead className="sticky top-0 bg-white z-30 text-center">
                       હપ્તો
                     </TableHead>
-                    <TableHead className="text-center font-semibold min-w-[80px] md:min-w-[100px] text-xs md:text-sm">
+                    <TableHead className="sticky top-0 bg-white z-30 text-center">
                       આ.નો ઉ.
                     </TableHead>
-                    <TableHead className="text-center font-semibold min-w-[80px] md:min-w-[100px] text-xs md:text-sm">
+                    <TableHead className="sticky top-0 bg-white z-20 text-center">
                       વ્યાજ
                     </TableHead>
-                    <TableHead className="text-center font-semibold min-w-[80px] md:min-w-[100px] text-xs md:text-sm">
+                    <TableHead className="sticky top-0 bg-white z-20 text-center">
                       દંડ
                     </TableHead>
-                    <TableHead className="text-center font-semibold min-w-[100px] md:min-w-[100px] text-xs md:text-sm">
+                    <TableHead className="sticky top-0 bg-white z-20 text-center">
                       ઉપાડ જમા
                     </TableHead>
-                    <TableHead className="text-center font-semibold min-w-[100px] md:min-w-[100px] text-xs md:text-sm">
+                    <TableHead className="sticky top-0 bg-white z-20 text-center">
                       નવો ઉપાડ
                     </TableHead>
-                    <TableHead className="text-center font-semibold min-w-[100px] md:min-w-[120px] text-xs md:text-sm">
+                    <TableHead className="sticky top-0 bg-white z-20 text-center">
                       હપ્તો + વ્યાજ
                     </TableHead>
-                    <TableHead className="text-center font-semibold min-w-[80px] md:min-w-[100px] text-xs md:text-sm">
+                    <TableHead className="sticky top-0 bg-white z-20 text-center">
                       Action
                     </TableHead>
                   </TableRow>
                 </TableHeader>
+
                 <TableBody>
                   {isTableLoading || isTableDataLoading ? (
                     Array.from({ length: 5 }).map((_, index) => (
@@ -1653,19 +1639,19 @@ export default function AnalyticsPage() {
                         </TableCell>
                       </TableRow>
                     ))
-                  ) : memberData.length === 0 ? (
+                  ) : filteredMemberData.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={11} className="text-center py-8">
                         <div className="flex flex-col items-center justify-center text-gray-500">
                           <HiOutlineUserGroup className="h-10 w-10 md:h-12 md:w-12 mb-3 md:mb-4 opacity-50" />
                           <p className="text-base md:text-lg font-medium mb-1 md:mb-2">
-                            No members added yet
+                            {searchQuery ? "No members found" : "No members added yet"}
                           </p>
                         </div>
                       </TableCell>
                     </TableRow>
                   ) : (
-                    memberData.map((row, index) => {
+                    filteredMemberData.map((row, index) => {
                       const carriedForwardAmount =
                         calculateCarriedForwardAmount(row.subUser._id);
                       const carriedForwardInstallment =
@@ -1682,7 +1668,13 @@ export default function AnalyticsPage() {
                       return (
                         <TableRow key={row._id}>
                           <TableCell className="text-center">
-                            <Checkbox checked={isChecked} disabled />
+                            <Checkbox
+                              checked={isChecked}
+                              onCheckedChange={() => handleCheckboxClick(row.subUser._id)}
+                              className="border border-gray-600 h-5 w-5 rounded-sm
+                                data-[state=checked]:bg-green-600
+                                data-[state=checked]:border-green-600"
+                            />
                           </TableCell>
                           <TableCell className="text-center font-medium text-xs md:text-sm">
                             {index + 1}
@@ -1798,6 +1790,142 @@ export default function AnalyticsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* MOBILE 2-COLUMN CARD GRID */}
+      <div className="md:hidden grid grid-cols-2 gap-2 mt-3">
+        {filteredMemberData.map((row, index) => {
+          const carriedForwardInstallment = calculateCarriedForwardInstallment(
+            row.subUser._id
+          );
+          const carriedForwardAmount = calculateCarriedForwardAmount(
+            row.subUser._id
+          );
+
+          const isChecked = shouldCheckboxBeChecked(row.subUser._id);
+          const hasPaidNewInstallment =
+            row.installment > carriedForwardInstallment;
+
+          const totalInstallmentDisplay = getDisplayInstallmentValue(row);
+
+          return (
+            <div
+              key={row._id}
+              className="bg-green-50 border border-green-200 shadow-sm rounded-md p-2 flex flex-col gap-1"
+            >
+              {/* TOP: Checkbox + Name + Index */}
+              <div className="flex items-center justify-between">
+                <Checkbox
+                  checked={isChecked}
+                  onCheckedChange={() => handleCheckboxClick(row.subUser._id)}
+                  className="
+                    h-4 w-4 border border-gray-600
+                    data-[state=checked]:bg-green-600
+                    data-[state=checked]:border-green-600
+                  "
+                />
+
+                <p className="font-semibold text-[11px] text-green-700 truncate flex-1 ml-2">
+                  {row.subUser.subUserName}
+                </p>
+
+                <span className="text-[10px] text-green-600 ml-1">
+                  #{index + 1}
+                </span>
+              </div>
+
+              {/* Installment */}
+              <div className="flex justify-between text-[10px]">
+                <span className="text-gray-600">હપ્તો</span>
+
+                <span
+                  className={`font-semibold ${
+                    isChecked
+                      ? "text-green-700"
+                      : hasPaidNewInstallment
+                      ? "text-blue-600"
+                      : "text-gray-500"
+                  }`}
+                >
+                  ₹{totalInstallmentDisplay}
+                </span>
+              </div>
+
+              {/* Carried Forward Installment */}
+              {carriedForwardInstallment > 0 &&
+                row.installment !== carriedForwardInstallment && (
+                  <div className="text-[10px] text-gray-500 text-right">
+                    Prev: ₹{carriedForwardInstallment}
+                  </div>
+                )}
+
+              {/* Amount */}
+              <div className="flex justify-between text-[10px]">
+                <span className="text-gray-600">આ.નો ઉ.</span>
+                <span className="font-semibold text-green-700">
+                  {carriedForwardAmount > 0
+                    ? `₹${carriedForwardAmount}`
+                    : row.amount > 0
+                    ? `₹${row.amount}`
+                    : "-"}
+                </span>
+              </div>
+
+              {/* Interest */}
+              <div className="flex justify-between text-[10px]">
+                <span className="text-gray-600">વ્યાજ</span>
+                <span className="font-semibold text-green-700">
+                  {row.interest > 0 ? `₹${row.interest}` : "-"}
+                </span>
+              </div>
+
+              {/* Fine */}
+              <div className="flex justify-between text-[10px]">
+                <span className="text-gray-600">દંડ</span>
+                <span className="font-semibold text-green-700">
+                  {row.fine > 0 ? `₹${row.fine}` : "-"}
+                </span>
+              </div>
+
+              {/* Withdrawal */}
+              <div className="flex justify-between text-[10px]">
+                <span className="text-gray-600">ઉપાડ જમા</span>
+                <span className="font-semibold text-green-700">
+                  {row.withdrawal > 0 ? `₹${row.withdrawal}` : "-"}
+                </span>
+              </div>
+
+              {/* New Withdrawal */}
+              <div className="flex justify-between text-[10px]">
+                <span className="text-gray-600">નવો ઉપાડ</span>
+                <span className="font-semibold text-green-700">
+                  {row.newWithdrawal > 0 ? `₹${row.newWithdrawal}` : "-"}
+                </span>
+              </div>
+
+              {/* Total Installment + Interest */}
+              <div className="flex justify-between text-[10px]">
+                <span className="text-gray-600">કુલ (હપ્તો+વ્યાજ)</span>
+                <span className="font-semibold text-green-700">
+                  {isChecked
+                    ? `₹${(row.installment + row.interest).toLocaleString()}`
+                    : "₹0"}
+                </span>
+              </div>
+
+              {/* Update Button */}
+              <button
+                onClick={() => handleRowAction(row)}
+                className="
+                  mt-2 w-full bg-green-600 text-white py-1
+                  rounded text-[10px] active:scale-95
+                "
+              >
+                Update
+              </button>
+            </div>
+          );
+        })}
+      </div>
 
       {memberData.length > 0 && (
         <div className="mt-6 md:mt-8">
@@ -1927,6 +2055,86 @@ export default function AnalyticsPage() {
           </div>
         </div>
       )}
+
+      <MobileFooter>
+        <div
+          className="
+    fixed bottom-0 left-0 right-0
+    bg-white border-t shadow-md
+    p-2
+    flex flex-row items-center justify-between
+     gap-1
+    sm:hidden
+    z-30
+  "
+        >
+          <div className="relative">
+            <button
+              id="mobile-month-btn"
+              onClick={() =>
+                document.getElementById("mobile-month-trigger")?.click()
+              }
+              className="flex flex-col items-center mx-0.5 px-3"
+            >
+              <Calendar className="h-6 w-6" />
+              <span className="text-[10px]">Month</span>
+            </button>
+
+            {/* Hidden Select Trigger */}
+            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <SelectTrigger
+                id="mobile-month-trigger"
+                className="absolute top-0 left-0 w-full h-full opacity-0 pointer-events-none"
+              >
+                <SelectValue placeholder="Select month" />
+              </SelectTrigger>
+
+              <SelectContent
+                position="popper"
+                side="bottom"
+                align="center"
+                className="z-[9999]"
+              >
+                {months.map((month) => (
+                  <SelectItem key={month} value={month}>
+                    {new Date(month + "-01").toLocaleString("default", {
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* 2) Add Month */}
+          <button
+            onClick={handleAddNewMonth}
+            className="flex flex-col text-center items-center text-xs mx-0.5 px-3"
+          >
+            <Plus className="h-5 w-6 "  />
+            <span className="text-[10px] tems-center">Add month</span>
+          </button>
+
+          {/* 3) Add Member Dialog */}
+          <button
+            onClick={() => setIsAddMemberDialogOpen(true)}
+            className="flex flex-col items-center text-xs"
+          >
+            <IoPersonAdd className="h-5 w-5 gap-1.5 " />
+            <span className="text-[10px]"> Add Member</span>
+          </button>
+          
+          {/* 4) Hapto Dialog */}
+          <button
+            onClick={() => setIsHaptoDialogOpen(true)}
+            className="flex flex-col items-center text-xs px-3"
+          >
+            <TbTransactionRupee  className="h-5 w-5"/>
+            <span className="text-[10px]">Hapto</span>
+          </button>
+        </div>
+      </MobileFooter>
     </>
   );
 }

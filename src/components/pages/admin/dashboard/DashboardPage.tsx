@@ -131,9 +131,11 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="rounded-md border">
+              <div className="overflow-x-auto w-full">
+            <div className="max-h-[420px] overflow-y-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-red-50">
+                  <TableRow className="bg-red-50 min-w-[1000px] w-full"  >
                     <TableHead className="font-semibold text-red-800">Sr. No.</TableHead>
                     <TableHead className="font-semibold text-red-800">Mandal Name</TableHead>
                     <TableHead className="font-semibold text-red-800">મંડળ નામ</TableHead>
@@ -166,6 +168,8 @@ export default function DashboardPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
+              </div>
             </div>
             <div className="mt-4 text-center">
               <Button variant="outline">View All Mandals</Button>

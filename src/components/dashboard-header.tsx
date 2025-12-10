@@ -37,8 +37,9 @@ export function DashboardHeader({ onMobileMenuToggle }: DashboardHeaderProps) {
 
   if (isLoading) {
     return (
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex h-16 items-center px-6">
+     <header className="sticky top-0 z-50 w-full max-w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+  <div className="flex h-16 items-center px-4 sm:px-6 max-w-[2000px] mx-auto w-full">
+
           <Button variant="ghost" size="sm" className="md:hidden mr-2 h-8 w-8 p-0" onClick={onMobileMenuToggle}>
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -64,8 +65,9 @@ export function DashboardHeader({ onMobileMenuToggle }: DashboardHeaderProps) {
   }
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="flex h-16 items-center px-6">
+   <header className="sticky top-0 z-50 w-full max-w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+  <div className="flex h-16 items-center px-4 sm:px-6 max-w-[2000px] mx-auto w-full">
+
         <Button variant="ghost" size="sm" className="md:hidden mr-2 h-8 w-8 p-0" onClick={onMobileMenuToggle}>
           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
