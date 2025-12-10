@@ -88,7 +88,9 @@ export default function AnalyticsPage() {
 
   const [subUsers, setSubUsers] = useState<SubUser[]>([]);
   const [memberData, setMemberData] = useState<MemberData[]>([]);
-  const [filteredMemberData, setFilteredMemberData] = useState<MemberData[]>([]);
+  const [filteredMemberData, setFilteredMemberData] = useState<MemberData[]>(
+    []
+  );
   const [months, setMonths] = useState<string[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<string>("");
 
@@ -330,10 +332,15 @@ export default function AnalyticsPage() {
   };
 
   const calculations = useMemo(() => {
-    const totalInstallments = memberData.reduce(
-      (sum, row) => sum + row.installment,
-      0
-    );
+    // Calculate total installments - use mandal's default for rows with 0 installment
+    const totalInstallments = memberData.reduce((sum, row) => {
+      const rowInstallment =
+        row.installment === 0 && mandalMonthlyInstallment > 0
+          ? mandalMonthlyInstallment
+          : row.installment;
+      return sum + rowInstallment;
+    }, 0);
+
     const totalAmount = memberData.reduce((sum, row) => sum + row.amount, 0);
     const totalInterest = memberData.reduce(
       (sum, row) => sum + row.interest,
@@ -350,7 +357,15 @@ export default function AnalyticsPage() {
     );
     const totalMembers = memberData.length;
 
-    const totalName = totalInstallments + totalInterest + totalWithdrawals;
+    // For totalName calculation, also use the correct installment value
+    const totalName = memberData.reduce((sum, row) => {
+      const rowInstallment =
+        row.installment === 0 && mandalMonthlyInstallment > 0
+          ? mandalMonthlyInstallment
+          : row.installment;
+      return sum + rowInstallment + row.interest + row.withdrawal;
+    }, 0);
+
     const bandSilak = totalName - totalNewWithdrawals;
     const Mandalcash = 0 + bandSilak;
     const interestPerPerson =
@@ -372,7 +387,7 @@ export default function AnalyticsPage() {
       interestPerPerson,
       perPerson,
     };
-  }, [memberData]);
+  }, [memberData, mandalMonthlyInstallment]); // Add mandalMonthlyInstallment to dependencies
 
   const calculateCarriedForwardInstallment = (memberId: string) => {
     if (!selectedMonth || !memberId) return 0;
@@ -426,7 +441,7 @@ export default function AnalyticsPage() {
     if (!selectedMonth) return;
 
     const newStatus = !shouldCheckboxBeChecked(memberId);
-    
+
     setManualUpdateStatus((prev) => ({
       ...prev,
       [`${memberId}_${selectedMonth}`]: newStatus,
@@ -448,7 +463,7 @@ export default function AnalyticsPage() {
     const allChecked = selectedMembers.length === allMemberIds.length;
 
     const newStatus = { ...manualUpdateStatus };
-    
+
     if (!allChecked) {
       // Select all
       allMemberIds.forEach((memberId) => {
@@ -462,7 +477,7 @@ export default function AnalyticsPage() {
       });
       setSelectedMembers([]);
     }
-    
+
     setManualUpdateStatus(newStatus);
   };
 
@@ -482,7 +497,14 @@ export default function AnalyticsPage() {
     const carriedForwardInstallment = calculateCarriedForwardInstallment(
       row.subUser._id
     );
-    return carriedForwardInstallment + row.installment;
+
+    // Use mandal's monthly installment if row.installment is 0
+    const currentInstallment =
+      row.installment === 0 && mandalMonthlyInstallment > 0
+        ? mandalMonthlyInstallment
+        : row.installment;
+
+    return carriedForwardInstallment + currentInstallment;
   };
 
   const handleAddMember = async () => {
@@ -738,53 +760,27 @@ export default function AnalyticsPage() {
       return;
     }
 
+    if (!selectedMonth) {
+      showErrorToast("Please select a month first");
+      return;
+    }
+
     try {
-      const isFirstTimeSet = !isHaptoSet;
+      // API call - mandalId નહિ, કારણ token માં છે
+      const result = await updateMandalInstallmentApi(numValue, selectedMonth);
 
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonthNum = now.getMonth() + 1;
-      const currentMonthStr = `${currentYear}-${currentMonthNum
-        .toString()
-        .padStart(2, "0")}`;
+      // તરત જ update કરો
+      setMandalMonthlyInstallment(numValue);
+      setIsHaptoSet(true);
+      setHaptoLabelValue(`Hapto: ₹${numValue}`);
 
-      const shouldUpdateSelectedMonth =
-        selectedMonth && selectedMonth >= currentMonthStr;
+      showSuccessToast(`Hapto set to ₹${numValue}`);
 
-      const result = await updateMandalInstallmentApi(
-        mandalId,
-        numValue,
-        selectedMonth
-      );
-
-      setMandalMonthlyInstallment(result.setInstallment ?? numValue);
-      setIsHaptoSet((result.setInstallment ?? numValue) > 0);
-      setHaptoLabelValue(`Hapto: ₹${result.setInstallment ?? numValue}`);
-
-      showSuccessToast(
-        `Hapto value set to ₹${result.setInstallment ?? numValue}`
-      );
-
-      if (selectedMonth && shouldUpdateSelectedMonth) {
-        setIsTableDataLoading(true);
-        const updatedData = await getMemberDataApi(selectedMonth);
-        setMemberData(updatedData);
-        setFilteredMemberData(updatedData);
-      } else if (selectedMonth && !shouldUpdateSelectedMonth) {
-        showSuccessToast(
-          `Hapto updated for future months. Current view shows previous month ${selectedMonth}`
-        );
-      }
-
-      if (isFirstTimeSet) {
-        showSuccessToast(
-          `Hapto value set. Future months will use ₹${numValue}`
-        );
-      } else {
-        showSuccessToast(
-          `Hapto value updated. Future months will use ₹${numValue}`
-        );
-      }
+      // MemberData refresh કરો - જેથી ટેબલમાં show થાય
+      setIsTableDataLoading(true);
+      const updatedData = await getMemberDataApi(selectedMonth);
+      setMemberData(updatedData);
+      setFilteredMemberData(updatedData);
 
       setIsHaptoDialogOpen(false);
       setHaptoValue("");
@@ -1265,32 +1261,16 @@ export default function AnalyticsPage() {
         </div>
       </PageHeader>
 
-      {/* Search Bar - Only for mobile (sm) */}
-      <div className="md:hidden px-4 mb-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <Input
-            type="search"
-            placeholder="Search members..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 w-full"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-      </div>
-
       <div>
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild></DialogTrigger>
-          <DialogContent className="max-w-[95vw] sm:max-w-2xl p-4 sm:p-6">
+          <DialogContent
+            className="
+    max-w-[95vw] sm:max-w-2xl 
+    p-4 sm:p-6 
+    max-h-[90vh]     /* limit height on small devices */
+    overflow-y-auto "
+          >
             <DialogHeader>
               <DialogTitle className="text-lg sm:text-xl">
                 Update Member Data
@@ -1645,7 +1625,9 @@ export default function AnalyticsPage() {
                         <div className="flex flex-col items-center justify-center text-gray-500">
                           <HiOutlineUserGroup className="h-10 w-10 md:h-12 md:w-12 mb-3 md:mb-4 opacity-50" />
                           <p className="text-base md:text-lg font-medium mb-1 md:mb-2">
-                            {searchQuery ? "No members found" : "No members added yet"}
+                            {searchQuery
+                              ? "No members found"
+                              : "No members added yet"}
                           </p>
                         </div>
                       </TableCell>
@@ -1670,7 +1652,9 @@ export default function AnalyticsPage() {
                           <TableCell className="text-center">
                             <Checkbox
                               checked={isChecked}
-                              onCheckedChange={() => handleCheckboxClick(row.subUser._id)}
+                              onCheckedChange={() =>
+                                handleCheckboxClick(row.subUser._id)
+                              }
                               className="border border-gray-600 h-5 w-5 rounded-sm
                                 data-[state=checked]:bg-green-600
                                 data-[state=checked]:border-green-600"
@@ -1791,270 +1775,299 @@ export default function AnalyticsPage() {
         </CardContent>
       </Card>
 
+      {/* MOBILE: Sticky Search + Current Month */}
+      <div className="md:hidden sticky top-0 z-30 bg-white px-4 py-2 flex items-center justify-between gap-3">
+        {/* Search Bar */}
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Input
+            type="search"
+            placeholder="Search members..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 w-full"
+          />
+        </div>
+
+        {/* Current Month Label */}
+        <div className="px-3 py-1 bg-yellow-50            -700 rounded-md border text-xs font-medium text-gray-600-600 whitespace-nowrap">
+          {selectedMonth
+            ? new Date(selectedMonth + "-01").toLocaleString("default", {
+                month: "short",
+                year: "numeric",
+              })
+            : "—"}
+        </div>
+      </div>
+
       {/* MOBILE 2-COLUMN CARD GRID */}
-      <div className="md:hidden grid grid-cols-2 gap-2 mt-3">
-        {filteredMemberData.map((row, index) => {
-          const carriedForwardInstallment = calculateCarriedForwardInstallment(
-            row.subUser._id
-          );
-          const carriedForwardAmount = calculateCarriedForwardAmount(
-            row.subUser._id
-          );
+      <div
+        className="md:block  lg:block overflow-y-auto px-4"
+        style={{ maxHeight: "calc(100vh - 140px)", paddingBottom: "80px" }}
+      >
+        <div className="md:hidden  grid grid-cols-2 gap-2 mt-3">
+          {filteredMemberData.map((row, index) => {
+            const carriedForwardInstallment =
+              calculateCarriedForwardInstallment(row.subUser._id);
+            const carriedForwardAmount = calculateCarriedForwardAmount(
+              row.subUser._id
+            );
 
-          const isChecked = shouldCheckboxBeChecked(row.subUser._id);
-          const hasPaidNewInstallment =
-            row.installment > carriedForwardInstallment;
+            const isChecked = shouldCheckboxBeChecked(row.subUser._id);
+            const hasPaidNewInstallment =
+              row.installment > carriedForwardInstallment;
 
-          const totalInstallmentDisplay = getDisplayInstallmentValue(row);
+            const totalInstallmentDisplay = getDisplayInstallmentValue(row);
 
-          return (
-            <div
-              key={row._id}
-              className="bg-green-50 border border-green-200 shadow-sm rounded-md p-2 flex flex-col gap-1"
-            >
-              {/* TOP: Checkbox + Name + Index */}
-              <div className="flex items-center justify-between">
-                <Checkbox
-                  checked={isChecked}
-                  onCheckedChange={() => handleCheckboxClick(row.subUser._id)}
-                  className="
+            return (
+              <div
+                key={row._id}
+                className="bg-green-50 border border-green-200 shadow-sm rounded-md p-2 flex flex-col gap-1"
+              >
+                {/* TOP: Checkbox + Name + Index */}
+                <div className="flex items-center justify-between">
+                  <Checkbox
+                    checked={isChecked}
+                    onCheckedChange={() => handleCheckboxClick(row.subUser._id)}
+                    className="
                     h-4 w-4 border border-gray-600
                     data-[state=checked]:bg-green-600
                     data-[state=checked]:border-green-600
                   "
-                />
+                  />
 
-                <p className="font-semibold text-[11px] text-green-700 truncate flex-1 ml-2">
-                  {row.subUser.subUserName}
-                </p>
+                  <p className="font-semibold text-[11px] text-green-700 truncate flex-1 ml-2">
+                    {row.subUser.subUserName}
+                  </p>
 
-                <span className="text-[10px] text-green-600 ml-1">
-                  #{index + 1}
-                </span>
-              </div>
+                  <span className="text-[10px] text-green-700 ml-1">
+                    #{index + 1}
+                  </span>
+                </div>
 
-              {/* Installment */}
-              <div className="flex justify-between text-[10px]">
-                <span className="text-gray-600">હપ્તો</span>
+                {/* Installment */}
+                <div className="flex justify-between text-[10px]">
+                  <span className="text-gray-600">હપ્તો</span>
 
-                <span
-                  className={`font-semibold ${
-                    isChecked
-                      ? "text-green-700"
-                      : hasPaidNewInstallment
-                      ? "text-blue-600"
-                      : "text-gray-500"
-                  }`}
-                >
-                  ₹{totalInstallmentDisplay}
-                </span>
-              </div>
+                  <span
+                    className={`font-semibold ${
+                      isChecked
+                        ? "text-green-700"
+                        : hasPaidNewInstallment
+                        ? "text-blue-600"
+                        : "text-gray-500"
+                    }`}
+                  >
+                    ₹{totalInstallmentDisplay}
+                  </span>
+                </div>
 
-              {/* Carried Forward Installment */}
-              {carriedForwardInstallment > 0 &&
-                row.installment !== carriedForwardInstallment && (
-                  <div className="text-[10px] text-gray-500 text-right">
-                    Prev: ₹{carriedForwardInstallment}
-                  </div>
-                )}
+                {/* Carried Forward Installment */}
+                {carriedForwardInstallment > 0 &&
+                  row.installment !== carriedForwardInstallment && (
+                    <div className="text-[10px] text-gray-500 text-right">
+                      Prev: ₹{carriedForwardInstallment}
+                    </div>
+                  )}
 
-              {/* Amount */}
-              <div className="flex justify-between text-[10px]">
-                <span className="text-gray-600">આ.નો ઉ.</span>
-                <span className="font-semibold text-green-700">
-                  {carriedForwardAmount > 0
-                    ? `₹${carriedForwardAmount}`
-                    : row.amount > 0
-                    ? `₹${row.amount}`
-                    : "-"}
-                </span>
-              </div>
+                {/* Amount */}
+                <div className="flex justify-between text-[10px]">
+                  <span className="text-gray-600">આ.નો ઉ.</span>
+                  <span className="font-semibold text-green-700">
+                    {carriedForwardAmount > 0
+                      ? `₹${carriedForwardAmount}`
+                      : row.amount > 0
+                      ? `₹${row.amount}`
+                      : "-"}
+                  </span>
+                </div>
 
-              {/* Interest */}
-              <div className="flex justify-between text-[10px]">
-                <span className="text-gray-600">વ્યાજ</span>
-                <span className="font-semibold text-green-700">
-                  {row.interest > 0 ? `₹${row.interest}` : "-"}
-                </span>
-              </div>
+                {/* Interest */}
+                <div className="flex justify-between text-[10px]">
+                  <span className="text-gray-600">વ્યાજ</span>
+                  <span className="font-semibold text-green-700">
+                    {row.interest > 0 ? `₹${row.interest}` : "-"}
+                  </span>
+                </div>
 
-              {/* Fine */}
-              <div className="flex justify-between text-[10px]">
-                <span className="text-gray-600">દંડ</span>
-                <span className="font-semibold text-green-700">
-                  {row.fine > 0 ? `₹${row.fine}` : "-"}
-                </span>
-              </div>
+                {/* Fine */}
+                <div className="flex justify-between text-[10px]">
+                  <span className="text-gray-600">દંડ</span>
+                  <span className="font-semibold text-green-700">
+                    {row.fine > 0 ? `₹${row.fine}` : "-"}
+                  </span>
+                </div>
 
-              {/* Withdrawal */}
-              <div className="flex justify-between text-[10px]">
-                <span className="text-gray-600">ઉપાડ જમા</span>
-                <span className="font-semibold text-green-700">
-                  {row.withdrawal > 0 ? `₹${row.withdrawal}` : "-"}
-                </span>
-              </div>
+                {/* Withdrawal */}
+                <div className="flex justify-between text-[10px]">
+                  <span className="text-gray-600">ઉપાડ જમા</span>
+                  <span className="font-semibold text-green-700">
+                    {row.withdrawal > 0 ? `₹${row.withdrawal}` : "-"}
+                  </span>
+                </div>
 
-              {/* New Withdrawal */}
-              <div className="flex justify-between text-[10px]">
-                <span className="text-gray-600">નવો ઉપાડ</span>
-                <span className="font-semibold text-green-700">
-                  {row.newWithdrawal > 0 ? `₹${row.newWithdrawal}` : "-"}
-                </span>
-              </div>
+                {/* New Withdrawal */}
+                <div className="flex justify-between text-[10px]">
+                  <span className="text-gray-600">નવો ઉપાડ</span>
+                  <span className="font-semibold text-green-700">
+                    {row.newWithdrawal > 0 ? `₹${row.newWithdrawal}` : "-"}
+                  </span>
+                </div>
 
-              {/* Total Installment + Interest */}
-              <div className="flex justify-between text-[10px]">
-                <span className="text-gray-600">કુલ (હપ્તો+વ્યાજ)</span>
-                <span className="font-semibold text-green-700">
-                  {isChecked
-                    ? `₹${(row.installment + row.interest).toLocaleString()}`
-                    : "₹0"}
-                </span>
-              </div>
+                {/* Total Installment + Interest */}
+                <div className="flex justify-between text-[10px]">
+                  <span className="text-gray-600">કુલ (હપ્તો+વ્યાજ)</span>
+                  <span className="font-semibold text-green-700">
+                    {isChecked
+                      ? `₹${(row.installment + row.interest).toLocaleString()}`
+                      : "₹0"}
+                  </span>
+                </div>
 
-              {/* Update Button */}
-              <button
-                onClick={() => handleRowAction(row)}
-                className="
-                  mt-2 w-full bg-green-600 text-white py-1
+                {/* Update Button */}
+                <button
+                  onClick={() => handleRowAction(row)}
+                  className="
+                  mt-2 w-full bg-green-700 text-white py-1
                   rounded text-[10px] active:scale-95
                 "
-              >
-                Update
-              </button>
-            </div>
-          );
-        })}
-      </div>
-
-      {memberData.length > 0 && (
-        <div className="mt-6 md:mt-8">
-          <h3 className="text-lg font-semibold mb-4">
-            Summary Calculations (Month)
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="bg-blue-50 border-blue-200">
-              <CardContent className="p-3 md:p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs md:text-sm font-medium text-blue-600">
-                      કુલ હપ્તા
-                    </p>
-                    <p className="text-lg md:text-2xl font-bold text-blue-800">
-                      ₹{calculations.totalInstallments.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="h-6 w-6 md:h-8 md:w-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <svg
-                      className="h-3 w-3 md:h-4 md:w-4 text-blue-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
-                      />
-                    </svg>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-green-50 border-green-200">
-              <CardContent className="p-3 md:p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs md:text-sm font-medium text-green-600">
-                      કુલ બ્યાજ
-                    </p>
-                    <p className="text-lg md:text-2xl font-bold text-green-800">
-                      ₹{calculations.totalInterest.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="h-6 w-6 md:h-8 md:w-8 bg-green-100 rounded-full flex items-center justify-center">
-                    <svg
-                      className="h-3 w-3 md:h-4 md:w-4 text-green-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-                      />
-                    </svg>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-orange-50 border-orange-200">
-              <CardContent className="p-3 md:p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs md:text-sm font-medium text-orange-600">
-                      કુલ ઉપાડ જમા
-                    </p>
-                    <p className="text-lg md:text-2xl font-bold text-orange-800">
-                      ₹{calculations.totalWithdrawals.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="h-6 w-6 md:h-8 md:w-8 bg-orange-100 rounded-full flex items-center justify-center">
-                    <svg
-                      className="h-3 w-3 md:h-4 md:w-4 text-orange-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M7 16l-4-4m0 0l4-4m-4 4h18"
-                      />
-                    </svg>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-purple-50 border-purple-200">
-              <CardContent className="p-3 md:p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs md:text-sm font-medium text-purple-600">
-                      કુલ રકમ
-                    </p>
-                    <p className="text-lg md:text-2xl font-bold text-purple-800">
-                      ₹{calculations.totalName.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="h-6 w-6 md:h-8 md:w-8 bg-purple-100 rounded-full flex items-center justify-center">
-                    <svg
-                      className="h-3 w-3 md:h-4 md:w-4 text-purple-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                      />
-                    </svg>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                >
+                  Update
+                </button>
+              </div>
+            );
+          })}
         </div>
-      )}
+
+        {memberData.length > 0 && (
+          <div className="mt-6 md:mt-8">
+            <h3 className="text-lg font-semibold mb-4">
+              Summary Calculations (Month)
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card className="bg-blue-50 border-blue-200">
+                <CardContent className="p-3 md:p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs md:text-sm font-medium text-blue-600">
+                        કુલ હપ્તા
+                      </p>
+                      <p className="text-lg md:text-2xl font-bold text-blue-800">
+                        ₹{calculations.totalInstallments.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="h-6 w-6 md:h-8 md:w-8 bg-blue-100 rounded-full flex items-center justify-center">
+                      <svg
+                        className="h-3 w-3 md:h-4 md:w-4 text-blue-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
+                        />
+                      </svg>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-green-50 border-green-200">
+                <CardContent className="p-3 md:p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs md:text-sm font-medium text-green-600">
+                        કુલ બ્યાજ
+                      </p>
+                      <p className="text-lg md:text-2xl font-bold text-green-800">
+                        ₹{calculations.totalInterest.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="h-6 w-6 md:h-8 md:w-8 bg-green-100 rounded-full flex items-center justify-center">
+                      <svg
+                        className="h-3 w-3 md:h-4 md:w-4 text-green-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                        />
+                      </svg>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-orange-50 border-orange-200">
+                <CardContent className="p-3 md:p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs md:text-sm font-medium text-orange-600">
+                        કુલ ઉપાડ જમા
+                      </p>
+                      <p className="text-lg md:text-2xl font-bold text-orange-800">
+                        ₹{calculations.totalWithdrawals.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="h-6 w-6 md:h-8 md:w-8 bg-orange-100 rounded-full flex items-center justify-center">
+                      <svg
+                        className="h-3 w-3 md:h-4 md:w-4 text-orange-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M7 16l-4-4m0 0l4-4m-4 4h18"
+                        />
+                      </svg>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-purple-50 border-purple-200">
+                <CardContent className="p-3 md:p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs md:text-sm font-medium text-purple-600">
+                        કુલ રકમ
+                      </p>
+                      <p className="text-lg md:text-2xl font-bold text-purple-800">
+                        ₹{calculations.totalName.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="h-6 w-6 md:h-8 md:w-8 bg-purple-100 rounded-full flex items-center justify-center">
+                      <svg
+                        className="h-3 w-3 md:h-4 md:w-4 text-purple-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                        />
+                      </svg>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        )}
+      </div>
 
       <MobileFooter>
         <div
@@ -2112,7 +2125,7 @@ export default function AnalyticsPage() {
             onClick={handleAddNewMonth}
             className="flex flex-col text-center items-center text-xs mx-0.5 px-3"
           >
-            <Plus className="h-5 w-6 "  />
+            <Plus className="h-5 w-6 " />
             <span className="text-[10px] tems-center">Add month</span>
           </button>
 
@@ -2124,13 +2137,13 @@ export default function AnalyticsPage() {
             <IoPersonAdd className="h-5 w-5 gap-1.5 " />
             <span className="text-[10px]"> Add Member</span>
           </button>
-          
+
           {/* 4) Hapto Dialog */}
           <button
             onClick={() => setIsHaptoDialogOpen(true)}
             className="flex flex-col items-center text-xs px-3"
           >
-            <TbTransactionRupee  className="h-5 w-5"/>
+            <TbTransactionRupee className="h-5 w-5" />
             <span className="text-[10px]">Hapto</span>
           </button>
         </div>

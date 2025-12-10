@@ -103,17 +103,14 @@ export const getAvailableSubUsersApi = async (month: string): Promise<SubUser[]>
 };
 
 export const updateMandalInstallmentApi = async (
-  mandalId: string,
   installment: number,
   selectedMonth: string
 ) => {
-  const response = await api.put(`/mandal/installment`, {
-    mandalId,
+  const response = await api.put("/mandal/installment", {
     installment,
     selectedMonth,
+    // mandalId remove કરો - token માંથી લેશે
   });
-
   return response.data;
 };
-
 

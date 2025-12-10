@@ -162,78 +162,68 @@ export async function updateMandalInstallment(request: AuthenticatedRequest) {
 
     await connectToDB();
 
-    // 🟢 Helper to compare YYYY-MM correctly
-    const monthToNumber = (m: string) => {
-      const [y, mo] = m.split("-");
-      return Number(y + mo.padStart(2, "0"));
-    };
+    const mandalId = request.decoded?.id;
 
-    // 🟢 Take body (NOT query)
-    const { mandalId, selectedMonth, installment } = await request.json();
+    const body = await request.json();
+    const { installment, selectedMonth } = body;
 
-    if (!mandalId || !selectedMonth) {
+    if (!mandalId || installment == null || !selectedMonth) {
       return NextResponse.json(
-        { error: "Mandal ID and selected month required" },
+        { error: "Installment and selectedMonth are required" },
         { status: 400 }
       );
     }
 
+    // Update mandal.installment
     const mandal = await Mandal.findById(mandalId);
     if (!mandal)
       return NextResponse.json({ error: "Mandal not found" }, { status: 404 });
 
-    // 🟢 Save installment in Mandal
     mandal.setInstallment = installment;
     await mandal.save();
 
-    // 🟢 Fetch all months of this mandal
-    let months = await MemberData.distinct("month", { mandal: mandalId });
+    // Extract year + month from selected month
+    const [selectedYear, selectedMonthNum] = selectedMonth.split("-").map(Number);
 
-    const normalize = (m: string) => {
-      const [y, mo] = m.split("-");
-      return `${y}-${mo.padStart(2, "0")}`;
-    };
+    // Fetch all MemberData months for this mandal
+    const allMonths = await MemberData.find({ mandal: mandalId });
 
-    months = months.map(normalize);
+    const monthsToUpdate: string[] = [];
 
-    // 🟢 Sort months (newest first)
-    months.sort((a, b) => b.localeCompare(a));
+    for (const record of allMonths) {
+      const [year, monthNum] = record.month.split("-").map(Number);
 
-    const normalizedSelectedMonth = normalize(selectedMonth);
-    const selectedNum = monthToNumber(normalizedSelectedMonth);
-
-    // 🟢 FUTURE + CURRENT MONTHS ONLY
-    const monthsToUpdate = months.filter(
-      (m) => monthToNumber(m) >= selectedNum
-    );
-
-    // 🟢 PREVIOUS MONTHS (NEVER UPDATE)
-    const monthsNotToUpdate = months.filter(
-      (m) => monthToNumber(m) < selectedNum
-    );
-
-    // 🟢 Update only selected + future months
-    const docs = await MemberData.find({
-      mandal: mandalId,
-      month: { $in: monthsToUpdate },
-    });
-
-    for (const doc of docs) {
-      doc.installment = installment;
-      doc.total = installment + (doc.interest || 0);
-      await doc.save();
+      // SAME YEAR + FUTURE MONTHS ONLY
+      if (
+        year === selectedYear && 
+        monthNum >= selectedMonthNum &&
+        record.installment === 0
+      ) {
+        monthsToUpdate.push(record.month);
+      }
     }
+
+    // Update only those months
+    await MemberData.updateMany(
+      {
+        mandal: mandalId,
+        month: { $in: monthsToUpdate },
+        installment: 0
+      },
+      {
+        $set: { installment }
+      }
+    );
 
     return NextResponse.json(
       {
-        message: "Hapto updated successfully",
-        setInstallment: installment,
+        message: "Installment applied to same-year future months",
         updatedMonths: monthsToUpdate,
-        notUpdatedMonths: monthsNotToUpdate,
-        updatedCount: docs.length,
+        setInstallment: installment
       },
       { status: 200 }
     );
+
   } catch (error) {
     console.error("Installment update error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

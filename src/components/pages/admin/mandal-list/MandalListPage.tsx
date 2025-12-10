@@ -1,10 +1,11 @@
-"use client"
+"use client";
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import { SummaryCards } from "./SummaryCards";
 import { Filters, StatusFilter } from "./Filters";
 import { DesktopTableView } from "./DesktopTableView";
+import { MobileCardView } from "./MobileCardView"; // Import mobile view
 import { ViewModal } from "./ViewModal";
 import { EditModal } from "./EditModal";
 import { DeleteModal } from "./DeleteModal";
@@ -40,32 +41,32 @@ interface SubUserResponse {
 }
 
 export default function MandalListPage() {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
-  const [viewDialogOpen, setViewDialogOpen] = useState(false)
-  const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [selectedMandal, setSelectedMandal] = useState<Mandal | null>(null)
-  const [mandals, setMandals] = useState<Mandal[]>([])
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedMandal, setSelectedMandal] = useState<Mandal | null>(null);
+  const [mandals, setMandals] = useState<Mandal[]>([]);
 
   const filteredMandals = useMemo(() => {
     return mandals.filter((mandal) => {
       const matchesSearch =
         mandal.nameEn.toLowerCase().includes(searchTerm.toLowerCase()) ||
         mandal.nameGu.includes(searchTerm) ||
-        mandal.adminUsername.toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesStatus = statusFilter === "all" || mandal.status.toLowerCase() === statusFilter
-      return matchesSearch && matchesStatus
-    })
-  }, [searchTerm, statusFilter, mandals])
+        mandal.adminUsername.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = statusFilter === "all" || mandal.status.toLowerCase() === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [searchTerm, statusFilter, mandals]);
 
   const { totalMandals, activeMandals, inactiveMandals } = useMemo(() => {
-    const totalMandals = mandals.length
-    const activeMandals = mandals.filter((m) => m.status === "Active").length
-    const inactiveMandals = mandals.filter((m) => m.status === "Inactive").length
+    const totalMandals = mandals.length;
+    const activeMandals = mandals.filter((m) => m.status === "Active").length;
+    const inactiveMandals = mandals.filter((m) => m.status === "Inactive").length;
     
-    return { totalMandals, activeMandals, inactiveMandals }
-  }, [mandals])
+    return { totalMandals, activeMandals, inactiveMandals };
+  }, [mandals]);
 
   useEffect(() => {
     const fetchMandals = async () => {
@@ -73,7 +74,7 @@ export default function MandalListPage() {
         const [mandalResponse, subUsersResponse] = await Promise.all([
           getMandals(),
           getMandalSubUsersApi()
-        ])
+        ]);
 
         const subUserCounts: { [key: string]: number } = subUsersResponse.reduce((acc: { [key: string]: number }, subUser: SubUserResponse) => {
           const mandalId = typeof subUser.mandal === 'object' && subUser.mandal ? subUser.mandal._id : subUser.mandal;
@@ -81,7 +82,7 @@ export default function MandalListPage() {
             acc[mandalId] = (acc[mandalId] || 0) + 1;
           }
           return acc;
-        }, {})
+        }, {});
 
         const mappedMandals: Mandal[] = mandalResponse.map((item: MandalResponse) => ({
           id: item._id,
@@ -92,31 +93,30 @@ export default function MandalListPage() {
           status: item.isActive ? "Active" : "Inactive", 
           totalMembers: subUserCounts[item._id] || 0, 
           createdAt: item.createdAt || new Date().toISOString(),
-        }))
-        setMandals(mappedMandals)
+        }));
+        setMandals(mappedMandals);
       } catch (error) {
-        console.log("🚀 ~ fetchMandals ~ error:", error)
-        showErrorToast("Error fetching mandals or sub-users")
-      } finally {
+        console.log("🚀 ~ fetchMandals ~ error:", error);
+        showErrorToast("Error fetching mandals or sub-users");
       }
-    }
-    fetchMandals()
-  }, [])
+    };
+    fetchMandals();
+  }, []);
 
   const handleView = (mandal: Mandal) => {
-    setSelectedMandal(mandal)
-    setViewDialogOpen(true)
-  }
+    setSelectedMandal(mandal);
+    setViewDialogOpen(true);
+  };
 
   const handleEdit = (mandal: Mandal) => {
-    setSelectedMandal(mandal)
-    setEditDialogOpen(true)
-  }
+    setSelectedMandal(mandal);
+    setEditDialogOpen(true);
+  };
 
   const handleDelete = (mandal: Mandal) => {
-    setSelectedMandal(mandal)
-    setDeleteDialogOpen(true)
-  }
+    setSelectedMandal(mandal);
+    setDeleteDialogOpen(true);
+  };
 
   const confirmDelete = async () => {
     if (!selectedMandal) return;
@@ -126,19 +126,19 @@ export default function MandalListPage() {
       setMandals(mandals.filter((mandal) => mandal.id !== selectedMandal.id));
       showSuccessToast("Mandal deleted successfully");
     } catch (error) {
-      console.log("🚀 ~ confirmDelete ~ error:", error)
+      console.log("🚀 ~ confirmDelete ~ error:", error);
       showErrorToast("Error deleting mandal");
     } finally {
       setDeleteDialogOpen(false);
       setSelectedMandal(null);
     }
-  }
+  };
 
   const handleEditSuccess = (updatedMandal: Mandal) => {
     setMandals(mandals.map(m => m.id === updatedMandal.id ? updatedMandal : m));
     setEditDialogOpen(false);
     setSelectedMandal(null);
-  }
+  };
 
   return (
     <>
@@ -155,12 +155,23 @@ export default function MandalListPage() {
         onStatusFilterChange={setStatusFilter}
       />
 
-      <DesktopTableView 
+      {/* Mobile View */}
+      <MobileCardView 
         mandals={filteredMandals} 
         onView={handleView} 
         onEdit={handleEdit}
         onDelete={handleDelete}
       />
+
+      {/* Desktop & Tablet View */}
+      <div className="hidden md:block">
+        <DesktopTableView 
+          mandals={filteredMandals} 
+          onView={handleView} 
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
+      </div>
 
       <ViewModal
         mandal={selectedMandal}
@@ -183,5 +194,5 @@ export default function MandalListPage() {
         onConfirm={confirmDelete}
       />
     </>
-  )
+  );
 }
