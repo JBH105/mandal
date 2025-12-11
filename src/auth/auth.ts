@@ -2,6 +2,7 @@ import api from "@/utils/axiosConfig";
 
 export interface MemberData {
   _id: string;
+  mandal: string;
   subUser: { _id: string; subUserName: string; phoneNumber: string };
   month: string;
   installment: number;
@@ -10,7 +11,9 @@ export interface MemberData {
   fine: number;
   withdrawal: number;
   newWithdrawal: number;
-  total: number;
+  total: number; 
+  outerCheckbox: boolean;   
+  innerCheckbox: boolean;
 }
 
 export interface SubUser {
@@ -33,6 +36,7 @@ export const createMandal = async (data: {
   confirmPassword: string;
   establishedDate: string;
   isActive: boolean;
+  innerCheckbox?: boolean;
 }) => {
   const response = await api.post("/mandal", data);
   return response.data;
@@ -77,6 +81,8 @@ export const createMemberDataApi = async (data: {
   fine: number;
   withdrawal: number;
   newWithdrawal: number;
+  outerCheckbox: boolean;   
+  innerCheckbox: boolean;  
 }) => {
   const response = await api.post("/memberData", data);
   return response.data;

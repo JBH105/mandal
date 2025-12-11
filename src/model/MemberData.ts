@@ -11,11 +11,17 @@ export interface IMemberData extends Document {
   withdrawal: number;
   newWithdrawal: number;
   total: number;
+  outerCheckbox: boolean; 
+  innerCheckbox: boolean;
 }
 
 const MemberDataSchema: Schema = new Schema({
   mandal: { type: Schema.Types.ObjectId, ref: "userMandal", required: true },
-  subUser: { type: Schema.Types.ObjectId, ref: "MandalSubUser", required: true },
+  subUser: {
+    type: Schema.Types.ObjectId,
+    ref: "MandalSubUser",
+    required: true,
+  },
   month: { type: String, required: true },
   installment: { type: Number, default: 0 },
   amount: { type: Number, default: 0 },
@@ -24,6 +30,8 @@ const MemberDataSchema: Schema = new Schema({
   withdrawal: { type: Number, default: 0 },
   newWithdrawal: { type: Number, default: 0 },
   total: { type: Number, default: 0 },
+  outerCheckbox: { type: Boolean, default: false },
+  innerCheckbox: { type: Boolean, default: false },
 });
 
 export default mongoose.models.MemberData ||

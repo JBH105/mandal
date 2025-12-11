@@ -1,6 +1,4 @@
-// src/components/pages/mandal/analytics/AnalyticsPage.tsx
 "use client";
-
 import { useState, useEffect, useMemo } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -33,7 +31,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, Calendar, Search } from "lucide-react";
 import { HiOutlineUserGroup } from "react-icons/hi";
-
 import {
   getMandals,
   getMandalSubUsersApi,
@@ -46,7 +43,6 @@ import {
   SubUser,
   updateMandalInstallmentApi,
 } from "@/auth/auth";
-
 import { showErrorToast, showSuccessToast } from "@/middleware/lib/toast";
 import {
   validateNewMemberForm,
@@ -59,7 +55,6 @@ import { SkeletonCard, SkeletonTable, Loader } from "@/components/ui/loader";
 import { MobileFooter } from "@/components/ui/mobile-footer";
 import { IoPersonAdd } from "react-icons/io5";
 import { TbTransactionRupee } from "react-icons/tb";
-
 interface FormData {
   subUserId: string;
   installment: string;
@@ -68,24 +63,17 @@ interface FormData {
   fine: string;
   withdrawal: string;
   newWithdrawal: string;
+  outerCheckbox : boolean;
+  innerCheckbox : boolean ;
 }
-
 export interface NewMemberForm {
   subUserName: string;
   phoneNumber: string;
 }
-
-const LOCAL_STORAGE_KEYS = {
-  MANUAL_UPDATE_STATUS: (mandalId: string) =>
-    `mandal_${mandalId}_manual_update_status`,
-  MONTH_SELECTED: (mandalId: string) => `mandal_${mandalId}_selected_month`,
-};
-
 export default function AnalyticsPage() {
   const [mandalName, setMandalName] = useState<string>("આઈ શ્રી ખોડિયાર");
   const [establishedDate, setEstablishedDate] = useState<string | null>(null);
   const [mandalId, setMandalId] = useState<string | null>(null);
-
   const [subUsers, setSubUsers] = useState<SubUser[]>([]);
   const [memberData, setMemberData] = useState<MemberData[]>([]);
   const [filteredMemberData, setFilteredMemberData] = useState<MemberData[]>(
@@ -93,10 +81,8 @@ export default function AnalyticsPage() {
   );
   const [months, setMonths] = useState<string[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<string>("");
-
-  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  // const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState<boolean>(false);
-
   const [formData, setFormData] = useState<FormData>({
     subUserId: "",
     installment: "",
@@ -105,18 +91,16 @@ export default function AnalyticsPage() {
     fine: "",
     withdrawal: "",
     newWithdrawal: "",
+    innerCheckbox : false,
+    outerCheckbox: false
   });
-
   const [selectedMemberName, setSelectedMemberName] = useState<string>("");
-
   const [isAddMemberDialogOpen, setIsAddMemberDialogOpen] =
     useState<boolean>(false);
-
   const [newMemberData, setNewMemberData] = useState<NewMemberForm>({
     subUserName: "",
     phoneNumber: "",
   });
-
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [touched, setTouched] = useState<{
     subUserName: boolean;
@@ -125,70 +109,38 @@ export default function AnalyticsPage() {
     subUserName: false,
     phoneNumber: false,
   });
-
   const [isDashboardLoading, setIsDashboardLoading] = useState(true);
   const [isAddingMonth, setIsAddingMonth] = useState<boolean>(false);
   const [isTableLoading, setIsTableLoading] = useState<boolean>(false);
   const [isTableDataLoading, setIsTableDataLoading] = useState<boolean>(false);
-
   const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
   const [isAddingMember, setIsAddingMember] = useState<boolean>(false);
   const [hasDataLoaded, setHasDataLoaded] = useState<boolean>(false);
-
   const [previousMonthData, setPreviousMonthData] = useState<MemberData[]>([]);
-
   const [mandalMonthlyInstallment, setMandalMonthlyInstallment] =
     useState<number>(0);
-
   const [isHaptoDialogOpen, setIsHaptoDialogOpen] = useState<boolean>(false);
   const [haptoValue, setHaptoValue] = useState<string>("");
   const [haptoLabelValue, setHaptoLabelValue] = useState<string>("");
-
   const [isInstallmentPaid, setIsInstallmentPaid] = useState<boolean>(true);
   const [isHaptoSet, setIsHaptoSet] = useState<boolean>(false);
-
   const [searchQuery, setSearchQuery] = useState<string>("");
-
-
   const [isAddMonthDialogOpen, setIsAddMonthDialogOpen] = useState<boolean>(false);
 const [newMonthName, setNewMonthName] = useState<string>("");
 const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
-
-  const [manualUpdateStatus, setManualUpdateStatus] = useState<
-    Record<string, boolean>
-  >(() => {
-    if (typeof window !== "undefined" && mandalId) {
-      const saved = localStorage.getItem(
-        LOCAL_STORAGE_KEYS.MANUAL_UPDATE_STATUS(mandalId)
-      );
-      return saved ? JSON.parse(saved) : {};
-    }
-    return {};
-  });
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && mandalId) {
-      localStorage.setItem(
-        LOCAL_STORAGE_KEYS.MANUAL_UPDATE_STATUS(mandalId),
-        JSON.stringify(manualUpdateStatus)
-      );
-    }
-  }, [manualUpdateStatus, mandalId]);
-
-  useEffect(() => {
-    if (selectedMonth && typeof window !== "undefined" && mandalId) {
-      localStorage.setItem(
-        LOCAL_STORAGE_KEYS.MONTH_SELECTED(mandalId),
-        selectedMonth
-      );
-    }
-  }, [selectedMonth, mandalId]);
-
+ 
+  // useEffect(() => {
+  // if (selectedMonth && typeof window !== "undefined" && mandalId) {
+  // localStorage.setItem(
+  // LOCAL_STORAGE_KEYS.MONTH_SELECTED(mandalId),
+  // selectedMonth
+  // );
+  // }
+  // }, [selectedMonth, mandalId]);
   useEffect(() => {
     const timer = setTimeout(() => setIsDashboardLoading(false), 800);
     return () => clearTimeout(timer);
   }, []);
-
   // Filter member data based on search query
   useEffect(() => {
     if (searchQuery.trim() === "") {
@@ -202,12 +154,10 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
       setFilteredMemberData(filtered);
     }
   }, [searchQuery, memberData]);
-
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
         setIsDashboardLoading(true);
-
         const mandals = await getMandals();
         if (mandals.length > 0) {
           const currentMandal = mandals[0];
@@ -215,49 +165,39 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
           setEstablishedDate(currentMandal.establishedDate);
           const currentMandalId = currentMandal._id;
           setMandalId(currentMandalId);
-
           const backendInstallment = currentMandal.setInstallment || 0;
           setMandalMonthlyInstallment(backendInstallment);
           setIsHaptoSet(backendInstallment > 0);
           setHaptoLabelValue(
             backendInstallment > 0 ? `Hapto: ₹${backendInstallment}` : ""
           );
-
           const [users, allMonths] = await Promise.all([
             getMandalSubUsersApi(),
             getAllMonthsApi(),
           ]);
-
           setSubUsers(users);
-
           const validMonths = Array.isArray(allMonths) ? allMonths : [];
-
           if (validMonths.length > 0) {
             const sortedMonths = [...validMonths].sort((a, b) => {
               const dateA = new Date(a + "-01");
               const dateB = new Date(b + "-01");
               return dateB.getTime() - dateA.getTime();
             });
-
             setMonths(sortedMonths);
-
-            let defaultMonth = sortedMonths[0];
-            if (typeof window !== "undefined" && currentMandalId) {
-              const savedMonth = localStorage.getItem(
-                LOCAL_STORAGE_KEYS.MONTH_SELECTED(currentMandalId)
-              );
-              if (savedMonth && sortedMonths.includes(savedMonth)) {
-                defaultMonth = savedMonth;
-              }
-            }
-
+            const defaultMonth = sortedMonths[0];
+            // if (typeof window !== "undefined" && currentMandalId) {
+            // const savedMonth = localStorage.getItem(
+            // LOCAL_STORAGE_KEYS.MONTH_SELECTED(currentMandalId)
+            // );
+            // if (savedMonth && sortedMonths.includes(savedMonth)) {
+            // defaultMonth = savedMonth;
+            // }
+            // }
             setSelectedMonth(defaultMonth);
-
             if (defaultMonth) {
               const data: MemberData[] = await getMemberDataApi(defaultMonth);
               setMemberData(data);
               setFilteredMemberData(data);
-
               const currentMonthIndex = sortedMonths.indexOf(defaultMonth);
               if (currentMonthIndex > 0) {
                 const previousMonth = sortedMonths[currentMonthIndex - 1];
@@ -266,7 +206,6 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
                 );
                 setPreviousMonthData(prevData);
               }
-
               setHasDataLoaded(true);
             }
           } else {
@@ -275,7 +214,6 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
             setMemberData([]);
             setFilteredMemberData([]);
             setHasDataLoaded(true);
-
             showSuccessToast(
               "Welcome to your new mandal! Start by adding your first member."
             );
@@ -292,22 +230,18 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
         setIsDashboardLoading(false);
       }
     };
-
     fetchInitialData();
   }, []);
-
   useEffect(() => {
   if (!selectedMonth) return;
-
   const fetchMemberData = async () => {
     try {
       setIsMonthLoading(true);
       setIsTableDataLoading(true);
-      
+     
       const data: MemberData[] = await getMemberDataApi(selectedMonth);
       setMemberData(data);
       setFilteredMemberData(data);
-
       const currentMonthIndex = months.indexOf(selectedMonth);
       if (currentMonthIndex > 0 && months.length > 1) {
         const previousMonth = months[currentMonthIndex - 1];
@@ -324,21 +258,17 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
       setIsTableDataLoading(false);
     }
   };
-
   const timer = setTimeout(() => {
     fetchMemberData();
   }, 100);
-
   return () => clearTimeout(timer);
 }, [selectedMonth, months]);
-
   const getCurrentMonth = () => {
     const now = new Date();
     const year = now.getFullYear();
     const month = (now.getMonth() + 1).toString().padStart(2, "0");
     return `${year}-${month}`;
   };
-
   const calculations = useMemo(() => {
     // Calculate total installments - use mandal's default for rows with 0 installment
     const totalInstallments = memberData.reduce((sum, row) => {
@@ -348,7 +278,6 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
           : row.installment;
       return sum + rowInstallment;
     }, 0);
-
     const totalAmount = memberData.reduce((sum, row) => sum + row.amount, 0);
     const totalInterest = memberData.reduce(
       (sum, row) => sum + row.interest,
@@ -364,7 +293,6 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
       0
     );
     const totalMembers = memberData.length;
-
     // For totalName calculation, also use the correct installment value
     const totalName = memberData.reduce((sum, row) => {
       const rowInstallment =
@@ -373,13 +301,11 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
           : row.installment;
       return sum + rowInstallment + row.interest + row.withdrawal;
     }, 0);
-
     const bandSilak = totalName - totalNewWithdrawals;
     const Mandalcash = 0 + bandSilak;
     const interestPerPerson =
       totalMembers > 0 ? totalInterest / totalMembers : 0;
     const perPerson = totalMembers > 0 ? bandSilak / totalMembers : 0;
-
     return {
       totalInstallments,
       totalAmount,
@@ -395,100 +321,24 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
       interestPerPerson,
       perPerson,
     };
-  }, [memberData, mandalMonthlyInstallment]); 
-
-  const calculateCarriedForwardInstallment = (memberId: string) => {
-    if (!selectedMonth || !memberId) return 0;
-
-    const currentMonthIndex = months.indexOf(selectedMonth);
-    if (currentMonthIndex <= 0) return 0;
-
-    const previousData = previousMonthData.find(
-      (data) => data.subUser._id === memberId
-    );
-
-    if (previousData) {
-      return previousData.installment;
-    }
-
-    return 0;
-  };
-
+  }, [memberData, mandalMonthlyInstallment]);
   const calculateCarriedForwardAmount = (memberId: string) => {
-    if (!selectedMonth || !memberId) return 0;
-
-    const currentMonthIndex = months.indexOf(selectedMonth);
-    if (currentMonthIndex <= 0) return 0;
-
-    const previousData = previousMonthData.find(
-      (data) => data.subUser._id === memberId
-    );
-
-    if (previousData) {
-      return (
-        previousData.amount +
-        previousData.newWithdrawal -
-        previousData.withdrawal
-      );
-    }
-
-    return 0;
-  };
-
-  const shouldCheckboxBeChecked = (memberId: string) => {
-    if (!selectedMonth) return false;
-
-    const isManuallyUpdated =
-      manualUpdateStatus[`${memberId}_${selectedMonth}`] || false;
-
-    return isManuallyUpdated;
-  };
-
-  // Handle checkbox click - toggle installment payment status
-  const handleCheckboxClick = (memberId: string) => {
-    if (!selectedMonth) return;
-
-    const newStatus = !shouldCheckboxBeChecked(memberId);
-
-    setManualUpdateStatus((prev) => ({
-      ...prev,
-      [`${memberId}_${selectedMonth}`]: newStatus,
-    }));
-
-    // Update selected members array
-    if (newStatus) {
-      setSelectedMembers((prev) => [...prev, memberId]);
-    } else {
-      setSelectedMembers((prev) => prev.filter((id) => id !== memberId));
-    }
-  };
-
+  // Only apply carried forward for the NEWEST month
+  if (months[0] !== selectedMonth) return 0;
+  // Get previous month
+  if (months.length < 2) return 0;
+  const previousMonth = months[1]; // newest = 0, previous = 1
+  const previousData = previousMonthData.find(
+    (data) => data.subUser._id === memberId
+  );
+  if (!previousData) return 0;
+  return (
+    previousData.amount +
+    previousData.newWithdrawal -
+    previousData.withdrawal
+  );
+};
   // Select all checkboxes
-  const handleSelectAll = () => {
-    if (!selectedMonth || filteredMemberData.length === 0) return;
-
-    const allMemberIds = filteredMemberData.map((member) => member.subUser._id);
-    const allChecked = selectedMembers.length === allMemberIds.length;
-
-    const newStatus = { ...manualUpdateStatus };
-
-    if (!allChecked) {
-      // Select all
-      allMemberIds.forEach((memberId) => {
-        newStatus[`${memberId}_${selectedMonth}`] = true;
-      });
-      setSelectedMembers(allMemberIds);
-    } else {
-      // Deselect all
-      allMemberIds.forEach((memberId) => {
-        newStatus[`${memberId}_${selectedMonth}`] = false;
-      });
-      setSelectedMembers([]);
-    }
-
-    setManualUpdateStatus(newStatus);
-  };
-
   const getFilteredErrors = () => {
     const allErrors = validateNewMemberForm(newMemberData);
     const filtered: ValidationErrors = {};
@@ -500,43 +350,31 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
     }
     return filtered;
   };
-
   const getDisplayInstallmentValue = (row: MemberData): number => {
-  const carriedForwardInstallment = calculateCarriedForwardInstallment(
-    row.subUser._id
-  );
-
-  // Fix the condition - remove < 0 check
-  const currentInstallment =
-    row.installment === 0 && mandalMonthlyInstallment > 0
-      ? mandalMonthlyInstallment
-      : row.installment;
-
-  return carriedForwardInstallment + currentInstallment;
+  // If backend gave 0 but Hapto is set → show Hapto
+  if (row.installment === 0 && mandalMonthlyInstallment > 0) {
+    return mandalMonthlyInstallment;
+  }
+  // Otherwise → just show backend installment (correct)
+  return row.installment;
 };
-
   const handleAddMember = async () => {
     const validationErrors = validateNewMemberForm(newMemberData);
     setErrors(validationErrors);
     setTouched({ subUserName: true, phoneNumber: true });
-
     if (Object.keys(validationErrors).length > 0) {
       showErrorToast("Please fix the errors in the form");
       return;
     }
-
     try {
       setIsAddingMember(true);
       setIsTableDataLoading(true);
-
       const cleanPhoneNumber = cleanPhoneNumberForPayload(
         newMemberData.phoneNumber
       );
-
       const phoneNumberExists = subUsers.some(
         (user) => user.phoneNumber === cleanPhoneNumber
       );
-
       if (phoneNumberExists) {
         showErrorToast(
           "This phone number is already registered with another member"
@@ -548,23 +386,18 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
         setIsTableDataLoading(false);
         return;
       }
-
       // 1) Create subuser
       await createMandalSubUserApi({
         subUserName: newMemberData.subUserName,
         phoneNumber: cleanPhoneNumber,
       });
-
       showSuccessToast("Member created successfully!");
-
       // 2) Refresh subUsers list
       const users = await getMandalSubUsersApi();
       setSubUsers(users);
-
       // 3) Check if we need to create the first month based on established date
       let allMonths = await getAllMonthsApi();
       let validMonths = Array.isArray(allMonths) ? allMonths : [];
-
       // If no months exist, create the first month based on established date
       if (validMonths.length === 0 && establishedDate) {
         try {
@@ -573,25 +406,19 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
             .toString()
             .padStart(2, "0");
           const firstMonth = `${establishedYear}-${establishedMonth}`;
-
           await initializeMonthDataApi(firstMonth);
-
           allMonths = await getAllMonthsApi();
           validMonths = Array.isArray(allMonths) ? allMonths : [];
-
           const sortedMonths = [...validMonths].sort((a, b) => {
             const dateA = new Date(a + "-01");
             const dateB = new Date(b + "-01");
             return dateB.getTime() - dateA.getTime();
           });
-
           setMonths(sortedMonths);
           setSelectedMonth(firstMonth);
-
           const updatedData = await getMemberDataApi(firstMonth);
           setMemberData(updatedData);
           setFilteredMemberData(updatedData);
-
           showSuccessToast(
             `First month ${firstMonth} created based on mandal's established date`
           );
@@ -611,9 +438,7 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
             console.warn("initializeMonthDataApi failed for month", month, err);
           }
         });
-
         await Promise.all(initPromises);
-
         const targetMonth = selectedMonth || validMonths[0];
         const updatedData = await getMemberDataApi(targetMonth);
         setMemberData(updatedData);
@@ -621,24 +446,19 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
       } else {
         const fallbackMonth = getCurrentMonth();
         await initializeMonthDataApi(fallbackMonth);
-
         allMonths = await getAllMonthsApi();
         validMonths = Array.isArray(allMonths) ? allMonths : [];
-
         const sortedMonths = [...validMonths].sort((a, b) => {
           const dateA = new Date(a + "-01");
           const dateB = new Date(b + "-01");
           return dateB.getTime() - dateA.getTime();
         });
-
         setMonths(sortedMonths);
         setSelectedMonth(fallbackMonth);
-
         const updatedData = await getMemberDataApi(fallbackMonth);
         setMemberData(updatedData);
         setFilteredMemberData(updatedData);
       }
-
       setNewMemberData({ subUserName: "", phoneNumber: "" });
       setErrors({});
       setTouched({ subUserName: false, phoneNumber: false });
@@ -672,143 +492,122 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
       setIsTableDataLoading(false);
     }
   };
-
-  const handleAddData = async () => {
-    if (!formData.subUserId || !selectedMonth) {
-      showErrorToast("Please select a member and month");
-      return;
-    }
-
-    if (!/^\d{4}-\d{2}$/.test(selectedMonth)) {
-      showErrorToast("Invalid month format. Expected YYYY-MM");
-      return;
-    }
-
-    try {
-      setUpdatingMemberId(formData.subUserId);
-
-      const currentInstallment = parseInt(formData.installment) || 0;
-
-      const data = {
-        subUserId: formData.subUserId,
-        month: selectedMonth,
-        installment: currentInstallment,
-        amount: parseInt(formData.amount) || 0,
-        interest: parseInt(formData.interest) || 0,
-        fine: parseInt(formData.fine) || 0,
-        withdrawal: parseInt(formData.withdrawal) || 0,
-        newWithdrawal: parseInt(formData.newWithdrawal) || 0,
-      };
-
-      await createMemberDataApi(data);
-
-      setManualUpdateStatus((prev) => ({
-        ...prev,
-        [`${formData.subUserId}_${selectedMonth}`]: isInstallmentPaid,
-      }));
-
-      showSuccessToast("Member data updated successfully!");
-
-      const updatedData = await getMemberDataApi(selectedMonth);
-      setMemberData(updatedData);
-      setFilteredMemberData(updatedData);
-
-      setFormData({
-        subUserId: "",
-        installment: "",
-        amount: "",
-        interest: "",
-        fine: "",
-        withdrawal: "",
-        newWithdrawal: "",
-      });
-      setIsInstallmentPaid(true);
-      setSelectedMemberName("");
-      setIsAddDialogOpen(false);
-    } catch (error: unknown) {
-      console.log("🚀 ~ handleAddData ~ error:", error);
-
-      const err = error as {
-        response?: {
-          data?: {
-            message?: string;
-          };
+const handleAddData = async () => {
+  if (!formData.subUserId || !selectedMonth) {
+    showErrorToast("Please select a member and month");
+    return;
+  }
+  if (!/^\d{4}-\d{2}$/.test(selectedMonth)) {
+    showErrorToast("Invalid month format. Expected YYYY-MM");
+    return;
+  }
+  try {
+    setUpdatingMemberId(formData.subUserId);
+    const currentInstallment = parseInt(formData.installment) || 0;
+    const payload = {
+      subUserId: formData.subUserId,
+      month: selectedMonth,
+      installment: currentInstallment,
+      amount: parseInt(formData.amount) || 0,
+      interest: parseInt(formData.interest) || 0,
+      fine: parseInt(formData.fine) || 0,
+      withdrawal: parseInt(formData.withdrawal) || 0,
+      newWithdrawal: parseInt(formData.newWithdrawal) || 0,
+      outerCheckbox: formData.innerCheckbox ?? false,
+      innerCheckbox: isInstallmentPaid,
+    };
+    // Send clean payload without innerCheckbox
+    await createMemberDataApi(payload);
+    showSuccessToast("Member data updated successfully!");
+    const updatedData = await getMemberDataApi(selectedMonth);
+    setMemberData(updatedData);
+    setFilteredMemberData(updatedData);
+    setFormData({
+      subUserId: "",
+      installment: "",
+      amount: "",
+      interest: "",
+      fine: "",
+      withdrawal: "",
+      newWithdrawal: "",
+      outerCheckbox: false,
+      innerCheckbox: false
+    });
+    setIsInstallmentPaid(true);
+    setSelectedMemberName("");
+    setIsAddDialogOpen(false);
+  } catch (error: unknown) {
+    console.log("handleAddData ~ error:", error);
+    const err = error as {
+      response?: {
+        data?: {
+          message?: string;
         };
       };
-
-      const message = err.response?.data?.message;
-
-      if (
-        message?.includes("Month is required") ||
-        message?.includes("YYYY-MM")
-      ) {
-        showErrorToast("ત્રુટિ: મહિનો YYYY-MM ફોર્મેટમાં જરૂરી છે");
-      } else {
-        showErrorToast("Failed to update member data");
-      }
-    } finally {
-      setUpdatingMemberId(null);
+    };
+    const message = err.response?.data?.message;
+    if (
+      message?.includes("Month is required") ||
+      message?.includes("YYYY-MM")
+    ) {
+      showErrorToast("ત્રુટિ: મહિનો YYYY-MM ફોર્મેટમાં જરૂરી છે");
+    } else {
+      showErrorToast("Failed to update member data");
     }
-  };
-
+  } finally {
+    setUpdatingMemberId(null);
+  }
+};
  const handleHaptoSet = async () => {
   if (!haptoValue) {
     showErrorToast("Please enter a value for Hapto");
     return;
   }
-
   const numValue = parseInt(haptoValue);
   if (isNaN(numValue) || numValue < 0) {
     showErrorToast("Please enter a valid positive number");
     return;
   }
-
   if (!mandalId) {
     showErrorToast("Mandal not found");
     return;
   }
-
   if (!selectedMonth) {
     showErrorToast("Please select a month first");
     return;
   }
-
   try {
     setIsMonthLoading(true);
-    
+   
     // Check if this is first time set or update
     const isUpdate = isHaptoSet && mandalMonthlyInstallment > 0;
-    
+   
     // API call with isUpdate flag
     const result = await updateMandalInstallmentApi(
-      numValue, 
-      selectedMonth, 
+      numValue,
+      selectedMonth,
       isUpdate
     );
-
     // Update state
     setMandalMonthlyInstallment(numValue);
     setIsHaptoSet(true);
     setHaptoLabelValue(`Hapto: ₹${numValue}`);
-
     // Show appropriate success message
     if (isUpdate) {
       showSuccessToast(
-        `હપ્તો ₹${numValue} માં update થયો! 
+        `હપ્તો ₹${numValue} માં update થયો!
         Current month (${selectedMonth}) અને ભવિષ્યના મહિનાઓમાં લાગુ થશે.`
       );
     } else {
       showSuccessToast(
-        `હપ્તો ₹${numValue} સેટ થયો! 
+        `હપ્તો ₹${numValue} સેટ થયો!
         બધા મહિનાઓમાં (જ્યાં હપ્તો 0 હતો) લાગુ થશે.`
       );
     }
-
     // Refresh member data for current month
     const updatedData = await getMemberDataApi(selectedMonth);
     setMemberData(updatedData);
     setFilteredMemberData(updatedData);
-
     setIsHaptoDialogOpen(false);
     setHaptoValue("");
   } catch (error) {
@@ -818,10 +617,8 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
     setIsMonthLoading(false);
   }
 };
-
   const handleAddNewMonth = async () => {
   let newMonth: string;
-
   if (months.length === 0 && establishedDate) {
     const [year, month] = establishedDate.slice(0, 7).split("-").map(Number);
     newMonth = `${year}-${month.toString().padStart(2, "0")}`;
@@ -830,83 +627,69 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
     const [year, month] = latestMonth.split("-").map(Number);
     let nextMonth = month + 1;
     let nextYear = year;
-
     if (nextMonth > 12) {
       nextMonth = 1;
       nextYear = year + 1;
     }
-
     newMonth = `${nextYear}-${nextMonth.toString().padStart(2, "0")}`;
   } else {
     newMonth = getCurrentMonth();
   }
-
   // Set the new month name in state
   setNewMonthName(newMonth);
   // Open the confirmation dialog
   setIsAddMonthDialogOpen(true);
 };
-
 const confirmAddNewMonth = async () => {
   if (!newMonthName || !/^\d{4}-\d{2}$/.test(newMonthName)) {
     showErrorToast("Invalid month format. Expected YYYY-MM");
     return;
   }
-
   try {
     setIsAddingMonth(true);
     setIsTableLoading(true);
-
+    if (memberData.some(row => !row.outerCheckbox)) {
+      showErrorToast("Your previous month’s installment is still pending.");
+    }
+    // Create new month in backend
     await initializeMonthDataApi(newMonthName);
-
+    // Fetch all months again
     const allMonths = await getAllMonthsApi();
     const validMonths = Array.isArray(allMonths) ? allMonths : [];
-
+    // Sort newest → oldest
     validMonths.sort((a, b) => {
       const dateA = new Date(a + "-01");
       const dateB = new Date(b + "-01");
       return dateB.getTime() - dateA.getTime();
     });
-
     setMonths(validMonths);
     setSelectedMonth(newMonthName);
-
+    // Load data for new month
     const data = await getMemberDataApi(newMonthName);
     setMemberData(data);
     setFilteredMemberData(data);
-
-    const prevData =
-      months.length > 0 ? await getMemberDataApi(months[0]) : [];
-    setPreviousMonthData(prevData);
-
-    const newStatus = { ...manualUpdateStatus };
-    subUsers.forEach((subUser) => {
-      const key = `${subUser._id}_${newMonthName}`;
-      if (!(key in newStatus)) {
-        newStatus[key] = false;
-      }
-    });
-    setManualUpdateStatus(newStatus);
-
+    // ❗ IMPORTANT: Do NOT manually set previous month here.
+    // The useEffect([selectedMonth]) will automatically handle
+    // fetching previousMonthData correctly.
+    // Initialize manual update status for new month
+    // // const newStatus = { ...manualUpdateStatus };
+    // subUsers.forEach((subUser) => {
+    // const key = `${subUser._id}_${newMonthName}`;
+    // if (!(key in newStatus)) {
+    // newStatus[key] = false;
+    // }
+    // });
+   
     showSuccessToast(
       `મહિનો ${newMonthName} બનાવાયો! (Installment for this month will use backend's setInstallment)`
     );
-    
-    // Close dialog
     setIsAddMonthDialogOpen(false);
   } catch (error: unknown) {
     const err = error as {
-      response?: {
-        data?: {
-          message?: string;
-        };
-      };
+      response?: { data?: { message?: string } };
     };
-
     const message = err.response?.data?.message;
-
     console.error("Error creating new month:", error);
-
     if (message?.includes("Month is required")) {
       showErrorToast("ત્રુટિ: મહિનો YYYY-MM ફોર્મેટમાં જરૂરી છે");
     } else if (message) {
@@ -919,19 +702,16 @@ const confirmAddNewMonth = async () => {
     setIsTableLoading(false);
   }
 };
-
 const cancelAddNewMonth = () => {
   setIsAddMonthDialogOpen(false);
   setNewMonthName("");
-}; 
-
+};
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setNewMemberData({ ...newMemberData, subUserName: value });
     setTouched({ ...touched, subUserName: true });
     setErrors(getFilteredErrors());
   };
-
   const handlePhoneNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value;
     if (!value.startsWith("+91 ")) {
@@ -946,7 +726,6 @@ const cancelAddNewMonth = () => {
     setTouched({ ...touched, phoneNumber: true });
     setErrors(getFilteredErrors());
   };
-
   const handleDialogClose = (open: boolean) => {
     if (!open) {
       setNewMemberData({ subUserName: "", phoneNumber: "" });
@@ -954,32 +733,26 @@ const cancelAddNewMonth = () => {
       setTouched({ subUserName: false, phoneNumber: false });
     }
     setIsAddMemberDialogOpen(open);
-  };
-
+  };0
   const hasError = (field: keyof typeof touched) =>
     touched[field] && !!errors[field];
-
-  const handleRowAction = (row: MemberData) => {
-    const currentInstallment = row.installment;
-
-    setFormData({
-      subUserId: row.subUser._id,
-      installment: currentInstallment.toString(),
-      amount: row.amount?.toString() || "0",
-      interest: row.interest?.toString() || "0",
-      fine: row.fine?.toString() || "0",
-      withdrawal: row.withdrawal?.toString() || "0",
-      newWithdrawal: row.newWithdrawal?.toString() || "0",
-    });
-
-    const isManuallyUpdated =
-      manualUpdateStatus[`${row.subUser._id}_${selectedMonth}`] || false;
-    setIsInstallmentPaid(isManuallyUpdated);
-
-    setSelectedMemberName(row.subUser?.subUserName || "");
-    setIsAddDialogOpen(true);
-  };
-
+const handleRowAction = (row: MemberData) => {
+  const currentInstallment = row.installment;
+  setFormData({
+    subUserId: row.subUser._id,
+    installment: currentInstallment.toString(),
+    amount: row.amount?.toString() ?? "0",
+    interest: row.interest?.toString() ?? "0",
+    fine: row.fine?.toString() ?? "0",
+    withdrawal: row.withdrawal?.toString() ?? "0",
+    newWithdrawal: row.newWithdrawal?.toString() ?? "0",
+    outerCheckbox: row.outerCheckbox ?? false,
+    innerCheckbox: row.innerCheckbox ?? false,
+  });
+  setIsInstallmentPaid(row.innerCheckbox ?? false);
+  setSelectedMemberName(row.subUser?.subUserName || "");
+  setIsAddDialogOpen(true);
+};
   const handleInputFocus = (field: keyof Omit<FormData, "subUserId">) => {
     if (formData[field] === "0") {
       setFormData({
@@ -988,7 +761,6 @@ const cancelAddNewMonth = () => {
       });
     }
   };
-
   const handleInputBlur = (field: keyof Omit<FormData, "subUserId">) => {
     if (formData[field] === "") {
       if (field === "installment") {
@@ -1000,17 +772,7 @@ const cancelAddNewMonth = () => {
       });
     }
   };
-
-  
-  useEffect(() => {
-    if (filteredMemberData.length > 0 && selectedMonth) {
-      const membersWithCheckedBox = filteredMemberData
-        .filter((member) => shouldCheckboxBeChecked(member.subUser._id))
-        .map((member) => member.subUser._id);
-      setSelectedMembers(membersWithCheckedBox);
-    }
-  }, [filteredMemberData, selectedMonth, manualUpdateStatus]);
-
+ 
   if (isDashboardLoading && !hasDataLoaded) {
     return (
       <div className="p-4 md:p-6 space-y-6">
@@ -1026,13 +788,11 @@ const cancelAddNewMonth = () => {
             ))}
           </div>
         </div>
-
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
           {Array.from({ length: 4 }).map((_, i) => (
             <SkeletonCard key={i} />
           ))}
         </div>
-
         <div className="space-y-4">
           <div className="h-10 w-40 md:w-48 bg-gray-200 rounded animate-pulse" />
           <SkeletonTable rows={5} cols={11} />
@@ -1040,7 +800,6 @@ const cancelAddNewMonth = () => {
       </div>
     );
   }
-
   return (
     <>
       <PageHeader
@@ -1052,7 +811,7 @@ const cancelAddNewMonth = () => {
  hidden
     md:flex md:flex-row md:flex-wrap md:items-center md:gap-3
     lg:flex lg:flex-row lg:flex-wrap lg:items-center lg:gap-3
-    w-full       
+    w-full
   "
         >
           <div>
@@ -1088,12 +847,12 @@ const cancelAddNewMonth = () => {
             </Select>
           </div>
           <div className="">
-  <Button
+        <Button
     variant="default"
     onClick={handleAddNewMonth}
     className="w-full sm:w-auto lg:w-auto shrink-0"
     disabled={isAddingMonth || subUsers.length === 0}
-    
+   
   >
     {isAddingMonth ? (
       <Loader
@@ -1109,14 +868,14 @@ const cancelAddNewMonth = () => {
     <span className="ml-2">
       {isAddingMonth ? "Adding..." : "Add New Month"}
     </span>
-  </Button>
-</div>
+         </Button>
+          </div>
           <div className="">
             <div className="sm:ml-auto">
               <Dialog
                 open={isAddMemberDialogOpen}
                 onOpenChange={handleDialogClose}
-                
+               
               >
                 <DialogTrigger asChild>
                   <Button
@@ -1127,8 +886,8 @@ const cancelAddNewMonth = () => {
                     <span className="ml-2">Add Member</span>
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-[95vw] sm:max-w-md p-4 sm:p-6" onPointerDownOutside={(e) => e.preventDefault()}   
-    onInteractOutside={(e) => e.preventDefault()}      
+                <DialogContent className="max-w-[95vw] sm:max-w-md p-4 sm:p-6" onPointerDownOutside={(e) => e.preventDefault()}
+    onInteractOutside={(e) => e.preventDefault()}
     onEscapeKeyDown={(e) => e.preventDefault()} >
                   <DialogHeader>
                     <DialogTitle className="text-lg sm:text-xl">
@@ -1231,7 +990,7 @@ const cancelAddNewMonth = () => {
               <Dialog
                 open={isHaptoDialogOpen}
                 onOpenChange={setIsHaptoDialogOpen}
-                  
+                 
               >
                 <DialogTrigger asChild>
                   <Button
@@ -1245,9 +1004,9 @@ const cancelAddNewMonth = () => {
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-[95vw] sm:max-w-md p-4 sm:p-6"
-    onPointerDownOutside={(e) => e.preventDefault()}   
-    onInteractOutside={(e) => e.preventDefault()}      
-    onEscapeKeyDown={(e) => e.preventDefault()} 
+    onPointerDownOutside={(e) => e.preventDefault()}
+    onInteractOutside={(e) => e.preventDefault()}
+    onEscapeKeyDown={(e) => e.preventDefault()}
   >
     <DialogHeader>
       <DialogTitle className="text-lg sm:text-xl">
@@ -1274,7 +1033,7 @@ const cancelAddNewMonth = () => {
           }
           className="text-base"
         />
-        
+       
       </div>
     </div>
     <div className="flex flex-col sm:flex-row justify-end gap-2">
@@ -1318,19 +1077,18 @@ const cancelAddNewMonth = () => {
           </div>
         </div>
       </PageHeader>
-
       <div>
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild></DialogTrigger>
           <DialogContent
             className="
-    max-w-[95vw] sm:max-w-2xl 
-    p-4 sm:p-6 
-    max-h-[90vh]     /* limit height on small devices */
+    max-w-[95vw] sm:max-w-2xl
+    p-4 sm:p-6
+    max-h-[90vh] /* limit height on small devices */
     overflow-y-auto "
-    onPointerDownOutside={(e) => e.preventDefault()}   
-    onInteractOutside={(e) => e.preventDefault()}      
-    onEscapeKeyDown={(e) => e.preventDefault()}    
+    onPointerDownOutside={(e) => e.preventDefault()}
+    onInteractOutside={(e) => e.preventDefault()}
+    onEscapeKeyDown={(e) => e.preventDefault()}
           >
             <DialogHeader>
               <DialogTitle className="text-lg sm:text-xl">
@@ -1351,7 +1109,6 @@ const cancelAddNewMonth = () => {
                 />
                 <input type="hidden" value={formData.subUserId} />
               </div>
-
               <div className="space-y-2 sm:col-span-2 flex items-center gap-2">
                 <Checkbox
                   id="installmentPaid"
@@ -1367,7 +1124,6 @@ const cancelAddNewMonth = () => {
                   હપ્તો ચૂકવાયો (Installment Paid)
                 </Label>
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="installment" className="text-sm sm:text-base">
                   હપ્તો (Installment)
@@ -1389,7 +1145,6 @@ const cancelAddNewMonth = () => {
                   disabled={updatingMemberId !== null}
                 />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="amount" className="text-sm sm:text-base">
                   આ નો ઉ. (Amount)
@@ -1408,7 +1163,6 @@ const cancelAddNewMonth = () => {
                   disabled={updatingMemberId !== null}
                 />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="interest" className="text-sm sm:text-base">
                   બ્યાજ (Interest)
@@ -1427,7 +1181,6 @@ const cancelAddNewMonth = () => {
                   disabled={updatingMemberId !== null}
                 />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="fine" className="text-sm sm:text-base">
                   દંડ (Fine)
@@ -1446,7 +1199,6 @@ const cancelAddNewMonth = () => {
                   disabled={updatingMemberId !== null}
                 />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="withdrawal" className="text-sm sm:text-base">
                   ઉપાડ જમા (Withdrawal)
@@ -1465,7 +1217,6 @@ const cancelAddNewMonth = () => {
                   disabled={updatingMemberId !== null}
                 />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="newWithdrawal" className="text-sm sm:text-base">
                   નવો ઉપાડ (New Withdrawal)
@@ -1501,6 +1252,8 @@ const cancelAddNewMonth = () => {
                     fine: "",
                     withdrawal: "",
                     newWithdrawal: "",
+                    outerCheckbox : false,
+                    innerCheckbox : false
                   });
                   setIsInstallmentPaid(true);
                   setSelectedMemberName("");
@@ -1536,25 +1289,22 @@ const cancelAddNewMonth = () => {
           </DialogContent>
         </Dialog>
       </div>
-
       <Dialog open={isAddMonthDialogOpen} onOpenChange={setIsAddMonthDialogOpen} >
    <DialogContent
     className="max-w-[95vw] sm:max-w-md p-4 sm:p-6"
-    onPointerDownOutside={(e) => e.preventDefault()}   
-    onInteractOutside={(e) => e.preventDefault()}      
-    onEscapeKeyDown={(e) => e.preventDefault()}        
+    onPointerDownOutside={(e) => e.preventDefault()}
+    onInteractOutside={(e) => e.preventDefault()}
+    onEscapeKeyDown={(e) => e.preventDefault()}
   >
     <DialogHeader>
       <DialogTitle className="text-lg sm:text-xl">
         Confirm New Month
       </DialogTitle>
     </DialogHeader>
-    
+   
    <div className="py-4">
   <div className="p-4 rounded-lg bg-white border border-gray-200 shadow-md">
-
     <div className="flex items-center justify-between">
-
       {/* Current Month */}
       <div className="flex flex-col items-start">
         <p className="text-xs text-gray-500">Current</p>
@@ -1562,14 +1312,12 @@ const cancelAddNewMonth = () => {
           {selectedMonth || "No month selected"}
         </p>
       </div>
-
       {/* Arrow */}
       <div className="flex items-center justify-center">
         <div className="h-0.5 w-10 bg-gray-300"></div>
         <span className="mx-2 text-2xl font-bold text-gray-500">→</span>
         <div className="h-0.5 w-10 bg-gray-300"></div>
       </div>
-
       {/* New Month */}
       <div className="flex flex-col items-end">
         <p className="text-xs text-gray-500">New Month</p>
@@ -1577,15 +1325,11 @@ const cancelAddNewMonth = () => {
           {newMonthName || "--"}
         </p>
       </div>
-
     </div>
-
   </div>
 </div>
-
-
-    
-    
+   
+   
     <div className="flex flex-col sm:flex-row justify-end gap-2">
       <Button
         variant="outline"
@@ -1619,8 +1363,6 @@ const cancelAddNewMonth = () => {
     </div>
   </DialogContent>
       </Dialog>
-
-
       <Card className="hidden md:block lg:block">
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1677,22 +1419,12 @@ const cancelAddNewMonth = () => {
         <CardContent>
           <div className="overflow-x-auto w-full">
             <div className="max-h-[420px] overflow-y-auto">
-              <Table className="min-w-[1000px] w-full">
+<Table className="min-w-[1000px] w-full">
                 <TableHeader className="sticky top-0 z-20 bg-white">
                   <TableRow className="bg-muted/50">
-                    <TableHead className="sticky top-0 bg-white z-30 text-center">
-                      <Checkbox
-                        checked={
-                          filteredMemberData.length > 0 &&
-                          selectedMembers.length === filteredMemberData.length
-                        }
-                        onCheckedChange={handleSelectAll}
-                        className="border border-gray-600 h-5 w-5 rounded-sm
-                          data-[state=checked]:bg-green-600
-                          data-[state=checked]:border-green-600"
-                      />
+                   <TableHead className="sticky top-0 bg-white z-30 text-center">
                     </TableHead>
-                    <TableHead className="sticky top-0 bg-whitez-30 text-center">
+                    <TableHead className="sticky top-0 bg-white z-30 text-center">
                       ક્રમ નં.
                     </TableHead>
                     <TableHead className="sticky top-0 bg-white z-30">
@@ -1724,7 +1456,6 @@ const cancelAddNewMonth = () => {
                     </TableHead>
                   </TableRow>
                 </TableHeader>
-
                 <TableBody>
                   {isTableLoading || isTableDataLoading ? (
                     Array.from({ length: 5 }).map((_, index) => (
@@ -1781,25 +1512,17 @@ const cancelAddNewMonth = () => {
                     filteredMemberData.map((row, index) => {
                       const carriedForwardAmount =
                         calculateCarriedForwardAmount(row.subUser._id);
-                      const carriedForwardInstallment =
-                        calculateCarriedForwardInstallment(row.subUser._id);
-                      const isChecked = shouldCheckboxBeChecked(
-                        row.subUser._id
-                      );
-                      const hasPaidNewInstallment =
-                        row.installment > carriedForwardInstallment;
-
+                     
+                     const isChecked = row.outerCheckbox;
+                     
                       const totalInstallmentDisplay =
                         getDisplayInstallmentValue(row);
-
                       return (
                         <TableRow key={row._id}>
                           <TableCell className="text-center">
                             <Checkbox
                               checked={isChecked}
-                              onCheckedChange={() =>
-                                handleCheckboxClick(row.subUser._id)
-                              }
+                             onCheckedChange={() => handleRowAction(row)}
                               className="border border-gray-600 h-5 w-5 rounded-sm
                                 data-[state=checked]:bg-green-600
                                 data-[state=checked]:border-green-600"
@@ -1816,32 +1539,15 @@ const cancelAddNewMonth = () => {
                           <TableCell className="text-center text-xs md:text-sm">
                             <div className="flex flex-col items-center">
                               <div className="flex items-center justify-center gap-2">
-                                <Checkbox
-                                  checked={isChecked}
-                                  disabled
-                                  className="h-4 w-4 data-[state=checked]:bg-green-600"
-                                />
                                 <span
                                   className={`font-medium ${
-                                    isChecked
-                                      ? "text-green-600"
-                                      : hasPaidNewInstallment
-                                      ? "text-blue-600"
-                                      : "text-gray-500"
+                                    isChecked ? "text-green-600" : "text-gray-500"
                                   }`}
                                 >
                                   ₹{totalInstallmentDisplay?.toLocaleString()}
                                 </span>
                               </div>
-                              {carriedForwardInstallment > 0 &&
-                                row.installment !==
-                                  carriedForwardInstallment && (
-                                  <span className="text-[10px] text-gray-500 mt-1">
-                                    (Prev: ₹
-                                    {carriedForwardInstallment.toLocaleString()}
-                                    )
-                                  </span>
-                                )}
+                            
                             </div>
                           </TableCell>
                           <TableCell className="text-center text-xs md:text-sm font-semibold">
@@ -1919,7 +1625,6 @@ const cancelAddNewMonth = () => {
           </div>
         </CardContent>
       </Card>
-
      {/* MOBILE: Sticky Search + Current Month */}
       <div className="md:hidden sticky top-0 z-30 bg-white px-4 py-2 flex items-center justify-between gap-3">
   {/* Search Bar */}
@@ -1933,7 +1638,6 @@ const cancelAddNewMonth = () => {
       className="pl-10 w-full"
     />
   </div>
-
   {/* Current Month Label - With Loading */}
   {isMonthLoading ? (
     <div className="px-3 py-2 bg-gray-100 rounded-md border text-xs font-medium text-gray-600 whitespace-nowrap animate-pulse">
@@ -1950,7 +1654,6 @@ const cancelAddNewMonth = () => {
     </div>
   )}
       </div>
-
     {/* MOBILE 2-COLUMN CARD GRID */}
       <div
   className="md:block lg:block overflow-y-auto px-4"
@@ -1970,49 +1673,49 @@ const cancelAddNewMonth = () => {
             <div className="h-4 w-24 bg-gray-300 rounded ml-2 flex-1"></div>
             <div className="h-4 w-6 bg-gray-300 rounded ml-1"></div>
           </div>
-          
+         
           {/* Installment Skeleton */}
           <div className="flex justify-between">
             <div className="h-3 w-12 bg-gray-300 rounded"></div>
             <div className="h-3 w-16 bg-gray-300 rounded"></div>
           </div>
-          
+         
           {/* Amount Skeleton */}
           <div className="flex justify-between">
             <div className="h-3 w-12 bg-gray-300 rounded"></div>
             <div className="h-3 w-16 bg-gray-300 rounded"></div>
           </div>
-          
+         
           {/* Interest Skeleton */}
           <div className="flex justify-between">
             <div className="h-3 w-8 bg-gray-300 rounded"></div>
             <div className="h-3 w-12 bg-gray-300 rounded"></div>
           </div>
-          
+         
           {/* Fine Skeleton */}
           <div className="flex justify-between">
             <div className="h-3 w-8 bg-gray-300 rounded"></div>
             <div className="h-3 w-12 bg-gray-300 rounded"></div>
           </div>
-          
+         
           {/* Withdrawal Skeleton */}
           <div className="flex justify-between">
             <div className="h-3 w-16 bg-gray-300 rounded"></div>
             <div className="h-3 w-12 bg-gray-300 rounded"></div>
           </div>
-          
+         
           {/* New Withdrawal Skeleton */}
           <div className="flex justify-between">
             <div className="h-3 w-16 bg-gray-300 rounded"></div>
             <div className="h-3 w-12 bg-gray-300 rounded"></div>
           </div>
-          
+         
           {/* Total Skeleton */}
           <div className="flex justify-between">
             <div className="h-3 w-20 bg-gray-300 rounded"></div>
             <div className="h-3 w-16 bg-gray-300 rounded"></div>
           </div>
-          
+         
           {/* Button Skeleton */}
           <div className="mt-2 w-full h-8 bg-gray-300 rounded"></div>
         </div>
@@ -2023,8 +1726,8 @@ const cancelAddNewMonth = () => {
         <p className="text-base font-medium mb-2">
           {searchQuery ? "No members found" : "No members added yet"}
         </p>
-        <Button 
-          variant="outline" 
+        <Button
+          variant="outline"
           size="sm"
           onClick={() => setIsAddMemberDialogOpen(true)}
           className="mt-2"
@@ -2035,54 +1738,42 @@ const cancelAddNewMonth = () => {
       </div>
     ) : (
       filteredMemberData.map((row, index) => {
-        const carriedForwardInstallment =
-          calculateCarriedForwardInstallment(row.subUser._id);
+      
         const carriedForwardAmount = calculateCarriedForwardAmount(
           row.subUser._id
         );
-
-        const isChecked = shouldCheckboxBeChecked(row.subUser._id);
-        const hasPaidNewInstallment =
-          row.installment > carriedForwardInstallment;
-
+        const isChecked = row.outerCheckbox;
+       
         const totalInstallmentDisplay = getDisplayInstallmentValue(row);
-
         return (
           <div
             key={row._id}
-            className="bg-green-50 border border-green-200 shadow-sm rounded-md p-2 flex flex-col gap-1"
+            className="bg-white border border-b-emerald-500 shadow-sm rounded-md p-2 flex flex-col gap-1"
           >
             {/* TOP: Checkbox + Name + Index */}
             <div className="flex items-center justify-between">
               <Checkbox
-                checked={isChecked}
-                onCheckedChange={() => handleCheckboxClick(row.subUser._id)}
+               checked={row.outerCheckbox}
+                onCheckedChange={() => handleRowAction(row)}
                 className="
                   h-4 w-4 border border-gray-600
                   data-[state=checked]:bg-green-600
                   data-[state=checked]:border-green-600
                 "
               />
-
-              <p className="font-semibold text-[11px] text-green-700 truncate flex-1 ml-2">
+              <p className="font-semibold text-[11px] text-gray-500 truncate flex-1 ml-2">
                 {row.subUser.subUserName}
               </p>
-
               <span className="text-[10px] text-green-700 ml-1">
                 #{index + 1}
               </span>
             </div>
-
             <div className="flex justify-between text-[10px]">
   <span className="text-gray-600">હપ્તો</span>
   <div className="flex flex-col items-end">
     <span
       className={`font-semibold ${
-        isChecked
-          ? "text-green-700"
-          : hasPaidNewInstallment
-          ? "text-blue-600"
-          : "text-gray-500"
+        isChecked ? "text-green-600" : "text-gray-500"
       }`}
     >
       ₹{totalInstallmentDisplay}
@@ -2094,15 +1785,9 @@ const cancelAddNewMonth = () => {
     )}
   </div>
 </div>
-
-            {/* Carried Forward Installment */}
-            {carriedForwardInstallment > 0 &&
-              row.installment !== carriedForwardInstallment && (
-                <div className="text-[10px] text-gray-500 text-right">
-                  Prev: ₹{carriedForwardInstallment}
-                </div>
-              )}
-
+        {/* <div className="text-[10px] text-gray-500 text-right">
+  હપ્તો: ₹{getDisplayInstallmentValue(row)}
+</div> */}
             {/* Amount */}
             <div className="flex justify-between text-[10px]">
               <span className="text-gray-600">આ.નો ઉ.</span>
@@ -2114,7 +1799,6 @@ const cancelAddNewMonth = () => {
                   : "-"}
               </span>
             </div>
-
             {/* Interest */}
             <div className="flex justify-between text-[10px]">
               <span className="text-gray-600">વ્યાજ</span>
@@ -2122,7 +1806,6 @@ const cancelAddNewMonth = () => {
                 {row.interest > 0 ? `₹${row.interest}` : "-"}
               </span>
             </div>
-
             {/* Fine */}
             <div className="flex justify-between text-[10px]">
               <span className="text-gray-600">દંડ</span>
@@ -2130,7 +1813,6 @@ const cancelAddNewMonth = () => {
                 {row.fine > 0 ? `₹${row.fine}` : "-"}
               </span>
             </div>
-
             {/* Withdrawal */}
             <div className="flex justify-between text-[10px]">
               <span className="text-gray-600">ઉપાડ જમા</span>
@@ -2138,7 +1820,6 @@ const cancelAddNewMonth = () => {
                 {row.withdrawal > 0 ? `₹${row.withdrawal}` : "-"}
               </span>
             </div>
-
             {/* New Withdrawal */}
             <div className="flex justify-between text-[10px]">
               <span className="text-gray-600">નવો ઉપાડ</span>
@@ -2146,7 +1827,6 @@ const cancelAddNewMonth = () => {
                 {row.newWithdrawal > 0 ? `₹${row.newWithdrawal}` : "-"}
               </span>
             </div>
-
             {/* Total Installment + Interest */}
             <div className="flex justify-between text-[10px]">
               <span className="text-gray-600">કુલ (હપ્તો+વ્યાજ)</span>
@@ -2156,7 +1836,6 @@ const cancelAddNewMonth = () => {
                   : "₹0"}
               </span>
             </div>
-
             {/* Update Button */}
             <button
               onClick={() => handleRowAction(row)}
@@ -2172,7 +1851,6 @@ const cancelAddNewMonth = () => {
       })
     )}
   </div>
-
   {/* Summary Calculations Section - Mobile Skeleton */}
   {isMonthLoading || isTableDataLoading ? (
     <div className="mt-6">
@@ -2221,7 +1899,6 @@ const cancelAddNewMonth = () => {
             </div>
           </CardContent>
         </Card>
-
         <Card className="bg-green-50 border-green-200">
           <CardContent className="p-3">
             <div className="flex items-center justify-between">
@@ -2251,7 +1928,6 @@ const cancelAddNewMonth = () => {
             </div>
           </CardContent>
         </Card>
-
         <Card className="bg-orange-50 border-orange-200">
           <CardContent className="p-3">
             <div className="flex items-center justify-between">
@@ -2281,7 +1957,6 @@ const cancelAddNewMonth = () => {
             </div>
           </CardContent>
         </Card>
-
         <Card className="bg-purple-50 border-purple-200">
           <CardContent className="p-3">
             <div className="flex items-center justify-between">
@@ -2315,7 +1990,6 @@ const cancelAddNewMonth = () => {
     </div>
   )}
       </div>
-
      <MobileFooter>
   <div
     className="
@@ -2340,7 +2014,6 @@ const cancelAddNewMonth = () => {
         <Calendar className="h-6 w-6" />
         <span className="text-[10px]">Month</span>
       </button>
-
       {/* Hidden Select Trigger */}
       <Select value={selectedMonth} onValueChange={setSelectedMonth} disabled={isMonthLoading}>
         <SelectTrigger
@@ -2349,7 +2022,6 @@ const cancelAddNewMonth = () => {
         >
           <SelectValue placeholder="Select month" />
         </SelectTrigger>
-
         <SelectContent
           position="popper"
           side="bottom"
@@ -2367,7 +2039,6 @@ const cancelAddNewMonth = () => {
         </SelectContent>
       </Select>
     </div>
-
     {/* 2) Add Month */}
     <button
       onClick={handleAddNewMonth}
@@ -2388,7 +2059,6 @@ const cancelAddNewMonth = () => {
         </>
       )}
     </button>
-
     {/* 3) Add Member Dialog */}
     <button
       onClick={() => setIsAddMemberDialogOpen(true)}
@@ -2398,7 +2068,6 @@ const cancelAddNewMonth = () => {
       <IoPersonAdd className="h-5 w-5 gap-1.5" />
       <span className="text-[10px]">Add Member</span>
     </button>
-
     {/* 4) Hapto Dialog */}
     <button
       onClick={() => setIsHaptoDialogOpen(true)}
