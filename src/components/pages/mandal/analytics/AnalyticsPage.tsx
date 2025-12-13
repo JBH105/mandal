@@ -177,6 +177,14 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
             });
             setMonths(sortedMonths);
             const defaultMonth = sortedMonths[0];
+            // if (typeof window !== "undefined" && currentMandalId) {
+            // const savedMonth = localStorage.getItem(
+            // LOCAL_STORAGE_KEYS.MONTH_SELECTED(currentMandalId)
+            // );
+            // if (savedMonth && sortedMonths.includes(savedMonth)) {
+            // defaultMonth = savedMonth;
+            // }
+            // }
             setSelectedMonth(defaultMonth);
             if (defaultMonth) {
               const data: MemberData[] = await getMemberDataApi(defaultMonth);
@@ -259,6 +267,7 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
   };
 
   const calculations = useMemo(() => {
+    // Calculate total installments - use mandal's default for rows with 0 installment
     const totalInstallments = memberData.reduce((sum, row) => {
       const rowInstallment =
         row.installment === 0 && mandalMonthlyInstallment > 0
@@ -281,6 +290,7 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
       0
     );
     const totalMembers = memberData.length;
+    // For totalName calculation, also use the correct installment value
     const totalName = memberData.reduce((sum, row) => {
       const rowInstallment =
         row.installment === 0 && mandalMonthlyInstallment > 0
@@ -311,9 +321,11 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
   }, [memberData, mandalMonthlyInstallment]);
 
   const calculateCarriedForwardAmount = (memberId: string) => {
+  // Only apply carried forward for the NEWEST month
   if (months[0] !== selectedMonth) return 0;
+  // Get previous month
   if (months.length < 2) return 0;
-  const previousMonth = months[1];
+  const previousMonth = months[1]; // newest = 0, previous = 1
   const previousData = previousMonthData.find(
     (data) => data.subUser._id === memberId
   );
@@ -377,15 +389,19 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
         setIsTableDataLoading(false);
         return;
       }
+      // 1) Create subuser
       await createMandalSubUserApi({
         subUserName: newMemberData.subUserName,
         phoneNumber: cleanPhoneNumber,
       });
       showSuccessToast("Member created successfully!");
+      // 2) Refresh subUsers list
       const users = await getMandalSubUsersApi();
       setSubUsers(users);
+      // 3) Check if we need to create the first month based on established date
       let allMonths = await getAllMonthsApi();
       let validMonths = Array.isArray(allMonths) ? allMonths : [];
+      // If no months exist, create the first month based on established date
       if (validMonths.length === 0 && establishedDate) {
         try {
           const establishedYear = new Date(establishedDate).getFullYear();
@@ -414,16 +430,15 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
           showErrorToast("Failed to create initial month");
         }
       } else if (validMonths.length > 0) {
+        // FIXED: Only initialize data for the target month, not all months
         const targetMonth = selectedMonth || validMonths[0];
-        if (!/^\d{4}-\d{2}$/.test(targetMonth)) {
-          console.warn(`Invalid month format: ${targetMonth}`);
-        } else {
-          try {
-            await initializeMonthDataApi(targetMonth);
-          } catch (err) {
-            console.warn("initializeMonthDataApi failed for month", targetMonth, err);
-          }
+        
+        try {
+          await initializeMonthDataApi(targetMonth);
+        } catch (err) {
+          console.warn("initializeMonthDataApi failed for month", targetMonth, err);
         }
+        
         const updatedData = await getMemberDataApi(targetMonth);
         setMemberData(updatedData);
         setFilteredMemberData(updatedData);
@@ -559,9 +574,24 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
   }
   try {
     setIsMonthLoading(true);
+   
+    // Check if this is first time set or update
+    // const isUpdate = isHaptoSet && mandalMonthlyInstallment > 0;
+   
+    // API call with isUpdate flag
+    const result = await updateMandalInstallmentApi(
+      numValue,
+      selectedMonth,
+      true
+      
+    );
+    // Update state
     setMandalMonthlyInstallment(numValue);
     setIsHaptoSet(true);
     setHaptoLabelValue(`Hapto: ₹${numValue}`);
+    // Show appropriate success message
+   
+    // Refresh member data for current month
     const updatedData = await getMemberDataApi(selectedMonth);
     setMemberData(updatedData);
     setFilteredMemberData(updatedData);
@@ -755,7 +785,6 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
       </div>
     );
   }
-
   return (
     <>
       <div className="sticky top-0 z-40 bg-white">
