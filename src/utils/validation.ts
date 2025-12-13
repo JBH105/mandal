@@ -88,6 +88,7 @@ export const validateMemberDataCreation = (data: {
   fine: number;
   withdrawal: number;
   newWithdrawal: number;
+  pendingInstallment:number;
 }) => {
   const schema = z.object({
     subUserId: z.string().min(1, 'Sub-user ID is required'),
@@ -98,6 +99,7 @@ export const validateMemberDataCreation = (data: {
     fine: z.number().min(0, 'Fine must be a non-negative number'),
     withdrawal: z.number().min(0, 'Withdrawal must be a non-negative number'),
     newWithdrawal: z.number().min(0, 'New withdrawal must be a non-negative number'),
+    pendingInstallment : z.number().min(0, 'New withdrawal must be a non-negative number'),
   });
   return schema.parse(data);
 };

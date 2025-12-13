@@ -7,6 +7,7 @@ import { validateMandalCreation } from "@/utils/validation";
 import { authMiddleware, AuthenticatedRequest } from "@/middleware/authMiddleware";
 import MemberData from "@/model/MemberData";
 import MandalSubUser from "@/model/MandalSubUser";
+import mongoose from "mongoose";
 
 export async function createMandal(request: AuthenticatedRequest) {
   try {
@@ -123,8 +124,7 @@ export async function updateMandal(request: AuthenticatedRequest) {
 
 export async function deleteMandal(request: AuthenticatedRequest) {
   try {
-    // Apply auth middleware (admin role required)
-    const authResult = await authMiddleware(request, 'admin');
+    const authResult = await authMiddleware(request, "admin");
     if (authResult) return authResult;
 
     await connectToDB();
@@ -133,25 +133,53 @@ export async function deleteMandal(request: AuthenticatedRequest) {
     const id = searchParams.get("id");
 
     if (!id) {
-      return NextResponse.json({ error: "Mandal ID is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Mandal ID is required" },
+        { status: 400 }
+      );
     }
 
-    const mandal = await Mandal.findById(id);
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json(
+        { error: "Invalid Mandal ID format" },
+        { status: 400 }
+      );
+    }
+
+    const objectId = new mongoose.Types.ObjectId(id); 
+
+    const mandal = await Mandal.findById(objectId);
     if (!mandal) {
-      return NextResponse.json({ error: "Mandal not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Mandal not found" },
+        { status: 404 }
+      );
     }
 
-    // Delete related data
-    await MemberData.deleteMany({ mandal: id });
-    await MandalSubUser.deleteMany({ mandal: id });
+    const memberDeleteResult = await MemberData.deleteMany({ mandal: objectId });
+    const subUserDeleteResult = await MandalSubUser.deleteMany({ mandal: objectId });
 
-    // Delete the mandal
-    await Mandal.findByIdAndDelete(id);
+    console.log("Deleted MemberData count:", memberDeleteResult.deletedCount);
+    console.log("Deleted MandalSubUser count:", subUserDeleteResult.deletedCount);
 
-    return NextResponse.json({ message: "Mandal and related data deleted successfully" }, { status: 200 });
+    await Mandal.findByIdAndDelete(objectId);
+
+    return NextResponse.json(
+      {
+        message: "Mandal and all related data deleted successfully",
+        details: {
+          deletedMembers: memberDeleteResult.deletedCount,
+          deletedSubUsers: subUserDeleteResult.deletedCount,
+        },
+      },
+      { status: 200 }
+    );
   } catch (error: unknown) {
-    console.log("🚀 ~ deleteMandal ~ error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    console.error("deleteMandal error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
 

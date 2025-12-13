@@ -14,6 +14,7 @@ export interface MemberData {
   total: number; 
   outerCheckbox: boolean;   
   innerCheckbox: boolean;
+  pendingInstallment: number;
 }
 
 export interface SubUser {

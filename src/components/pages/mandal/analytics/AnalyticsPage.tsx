@@ -65,6 +65,7 @@ interface FormData {
   newWithdrawal: string;
   outerCheckbox : boolean;
   innerCheckbox : boolean ;
+  pendingInstallment :string
 }
 export interface NewMemberForm {
   subUserName: string;
@@ -92,7 +93,8 @@ export default function AnalyticsPage() {
     withdrawal: "",
     newWithdrawal: "",
     innerCheckbox : false,
-    outerCheckbox: false
+    outerCheckbox: false,
+    pendingInstallment: ""
   });
   const [selectedMemberName, setSelectedMemberName] = useState<string>("");
   const [isAddMemberDialogOpen, setIsAddMemberDialogOpen] =
@@ -129,19 +131,8 @@ export default function AnalyticsPage() {
 const [newMonthName, setNewMonthName] = useState<string>("");
 const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
  
-  // useEffect(() => {
-  // if (selectedMonth && typeof window !== "undefined" && mandalId) {
-  // localStorage.setItem(
-  // LOCAL_STORAGE_KEYS.MONTH_SELECTED(mandalId),
-  // selectedMonth
-  // );
-  // }
-  // }, [selectedMonth, mandalId]);
-  useEffect(() => {
-    const timer = setTimeout(() => setIsDashboardLoading(false), 800);
-    return () => clearTimeout(timer);
-  }, []);
-  // Filter member data based on search query
+ 
+
   useEffect(() => {
     if (searchQuery.trim() === "") {
       setFilteredMemberData(memberData);
@@ -154,6 +145,7 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
       setFilteredMemberData(filtered);
     }
   }, [searchQuery, memberData]);
+
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -185,14 +177,6 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
             });
             setMonths(sortedMonths);
             const defaultMonth = sortedMonths[0];
-            // if (typeof window !== "undefined" && currentMandalId) {
-            // const savedMonth = localStorage.getItem(
-            // LOCAL_STORAGE_KEYS.MONTH_SELECTED(currentMandalId)
-            // );
-            // if (savedMonth && sortedMonths.includes(savedMonth)) {
-            // defaultMonth = savedMonth;
-            // }
-            // }
             setSelectedMonth(defaultMonth);
             if (defaultMonth) {
               const data: MemberData[] = await getMemberDataApi(defaultMonth);
@@ -232,16 +216,19 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
     };
     fetchInitialData();
   }, []);
+
   useEffect(() => {
   if (!selectedMonth) return;
+
   const fetchMemberData = async () => {
+    setIsMonthLoading(true);
+    setIsTableDataLoading(true);
+
     try {
-      setIsMonthLoading(true);
-      setIsTableDataLoading(true);
-     
       const data: MemberData[] = await getMemberDataApi(selectedMonth);
       setMemberData(data);
       setFilteredMemberData(data);
+
       const currentMonthIndex = months.indexOf(selectedMonth);
       if (currentMonthIndex > 0 && months.length > 1) {
         const previousMonth = months[currentMonthIndex - 1];
@@ -250,27 +237,28 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
       } else {
         setPreviousMonthData([]);
       }
+
     } catch (error) {
-      console.log("🚀 ~ fetchMemberData ~ error:", error);
+      console.log(error);
       showErrorToast("Error fetching member data:");
     } finally {
       setIsMonthLoading(false);
       setIsTableDataLoading(false);
     }
   };
-  const timer = setTimeout(() => {
-    fetchMemberData();
-  }, 100);
-  return () => clearTimeout(timer);
-}, [selectedMonth, months]);
+
+  fetchMemberData();
+
+  }, [selectedMonth, months]);
+
   const getCurrentMonth = () => {
     const now = new Date();
     const year = now.getFullYear();
     const month = (now.getMonth() + 1).toString().padStart(2, "0");
     return `${year}-${month}`;
   };
+
   const calculations = useMemo(() => {
-    // Calculate total installments - use mandal's default for rows with 0 installment
     const totalInstallments = memberData.reduce((sum, row) => {
       const rowInstallment =
         row.installment === 0 && mandalMonthlyInstallment > 0
@@ -293,7 +281,6 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
       0
     );
     const totalMembers = memberData.length;
-    // For totalName calculation, also use the correct installment value
     const totalName = memberData.reduce((sum, row) => {
       const rowInstallment =
         row.installment === 0 && mandalMonthlyInstallment > 0
@@ -322,12 +309,11 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
       perPerson,
     };
   }, [memberData, mandalMonthlyInstallment]);
+
   const calculateCarriedForwardAmount = (memberId: string) => {
-  // Only apply carried forward for the NEWEST month
   if (months[0] !== selectedMonth) return 0;
-  // Get previous month
   if (months.length < 2) return 0;
-  const previousMonth = months[1]; // newest = 0, previous = 1
+  const previousMonth = months[1];
   const previousData = previousMonthData.find(
     (data) => data.subUser._id === memberId
   );
@@ -337,8 +323,8 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
     previousData.newWithdrawal -
     previousData.withdrawal
   );
-};
-  // Select all checkboxes
+  };
+
   const getFilteredErrors = () => {
     const allErrors = validateNewMemberForm(newMemberData);
     const filtered: ValidationErrors = {};
@@ -350,14 +336,19 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
     }
     return filtered;
   };
-  const getDisplayInstallmentValue = (row: MemberData): number => {
-  // If backend gave 0 but Hapto is set → show Hapto
-  if (row.installment === 0 && mandalMonthlyInstallment > 0) {
-    return mandalMonthlyInstallment;
-  }
-  // Otherwise → just show backend installment (correct)
-  return row.installment;
-};
+
+  const getDisplayInstallmentValue = (row: MemberData) => {
+  const hasPending = row.pendingInstallment > 0;
+  const showDefaultHapto = row.installment === 0 && mandalMonthlyInstallment > 0;
+  const displayValue = showDefaultHapto ? mandalMonthlyInstallment : row.installment;
+
+  return {
+    value: displayValue,
+    hasPending,
+    pendingAmount: row.pendingInstallment,
+  };
+  };
+
   const handleAddMember = async () => {
     const validationErrors = validateNewMemberForm(newMemberData);
     setErrors(validationErrors);
@@ -386,19 +377,15 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
         setIsTableDataLoading(false);
         return;
       }
-      // 1) Create subuser
       await createMandalSubUserApi({
         subUserName: newMemberData.subUserName,
         phoneNumber: cleanPhoneNumber,
       });
       showSuccessToast("Member created successfully!");
-      // 2) Refresh subUsers list
       const users = await getMandalSubUsersApi();
       setSubUsers(users);
-      // 3) Check if we need to create the first month based on established date
       let allMonths = await getAllMonthsApi();
       let validMonths = Array.isArray(allMonths) ? allMonths : [];
-      // If no months exist, create the first month based on established date
       if (validMonths.length === 0 && establishedDate) {
         try {
           const establishedYear = new Date(establishedDate).getFullYear();
@@ -427,19 +414,16 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
           showErrorToast("Failed to create initial month");
         }
       } else if (validMonths.length > 0) {
-        const initPromises = validMonths.map(async (month) => {
-          if (!/^\d{4}-\d{2}$/.test(month)) {
-            console.warn(`Invalid month format: ${month}`);
-            return;
-          }
-          try {
-            await initializeMonthDataApi(month);
-          } catch (err) {
-            console.warn("initializeMonthDataApi failed for month", month, err);
-          }
-        });
-        await Promise.all(initPromises);
         const targetMonth = selectedMonth || validMonths[0];
+        if (!/^\d{4}-\d{2}$/.test(targetMonth)) {
+          console.warn(`Invalid month format: ${targetMonth}`);
+        } else {
+          try {
+            await initializeMonthDataApi(targetMonth);
+          } catch (err) {
+            console.warn("initializeMonthDataApi failed for month", targetMonth, err);
+          }
+        }
         const updatedData = await getMemberDataApi(targetMonth);
         setMemberData(updatedData);
         setFilteredMemberData(updatedData);
@@ -492,36 +476,47 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
       setIsTableDataLoading(false);
     }
   };
-const handleAddData = async () => {
+
+  const handleAddData = async () => {
   if (!formData.subUserId || !selectedMonth) {
     showErrorToast("Please select a member and month");
     return;
   }
-  if (!/^\d{4}-\d{2}$/.test(selectedMonth)) {
-    showErrorToast("Invalid month format. Expected YYYY-MM");
-    return;
-  }
+
   try {
     setUpdatingMemberId(formData.subUserId);
-    const currentInstallment = parseInt(formData.installment) || 0;
+
+    const regularInstallment = mandalMonthlyInstallment > 0 
+      ? mandalMonthlyInstallment 
+      : 0; 
+
+    const userTypedTotal = parseInt(formData.installment) || 0;
+    const pendingFromForm = parseInt(formData.pendingInstallment) || 0;
+
+    const isFullyPaid = userTypedTotal >= (regularInstallment + pendingFromForm);
+
     const payload = {
       subUserId: formData.subUserId,
       month: selectedMonth,
-      installment: currentInstallment,
+      installment: regularInstallment,          
       amount: parseInt(formData.amount) || 0,
       interest: parseInt(formData.interest) || 0,
       fine: parseInt(formData.fine) || 0,
       withdrawal: parseInt(formData.withdrawal) || 0,
       newWithdrawal: parseInt(formData.newWithdrawal) || 0,
-      outerCheckbox: formData.innerCheckbox ?? false,
+      outerCheckbox: isFullyPaid,                
       innerCheckbox: isInstallmentPaid,
+      pendingInstallment: pendingFromForm,       
     };
-    // Send clean payload without innerCheckbox
+
     await createMemberDataApi(payload);
+
     showSuccessToast("Member data updated successfully!");
+    
     const updatedData = await getMemberDataApi(selectedMonth);
     setMemberData(updatedData);
     setFilteredMemberData(updatedData);
+
     setFormData({
       subUserId: "",
       installment: "",
@@ -531,33 +526,19 @@ const handleAddData = async () => {
       withdrawal: "",
       newWithdrawal: "",
       outerCheckbox: false,
-      innerCheckbox: false
+      innerCheckbox: false,
+      pendingInstallment: ""
     });
     setIsInstallmentPaid(true);
     setSelectedMemberName("");
     setIsAddDialogOpen(false);
-  } catch (error: unknown) {
-    console.log("handleAddData ~ error:", error);
-    const err = error as {
-      response?: {
-        data?: {
-          message?: string;
-        };
-      };
-    };
-    const message = err.response?.data?.message;
-    if (
-      message?.includes("Month is required") ||
-      message?.includes("YYYY-MM")
-    ) {
-      showErrorToast("ત્રુટિ: મહિનો YYYY-MM ફોર્મેટમાં જરૂરી છે");
-    } else {
-      showErrorToast("Failed to update member data");
-    }
+
+  } catch (error) {
   } finally {
     setUpdatingMemberId(null);
   }
-};
+  };
+
  const handleHaptoSet = async () => {
   if (!haptoValue) {
     showErrorToast("Please enter a value for Hapto");
@@ -578,33 +559,9 @@ const handleAddData = async () => {
   }
   try {
     setIsMonthLoading(true);
-   
-    // Check if this is first time set or update
-    const isUpdate = isHaptoSet && mandalMonthlyInstallment > 0;
-   
-    // API call with isUpdate flag
-    const result = await updateMandalInstallmentApi(
-      numValue,
-      selectedMonth,
-      isUpdate
-    );
-    // Update state
     setMandalMonthlyInstallment(numValue);
     setIsHaptoSet(true);
     setHaptoLabelValue(`Hapto: ₹${numValue}`);
-    // Show appropriate success message
-    if (isUpdate) {
-      showSuccessToast(
-        `હપ્તો ₹${numValue} માં update થયો!
-        Current month (${selectedMonth}) અને ભવિષ્યના મહિનાઓમાં લાગુ થશે.`
-      );
-    } else {
-      showSuccessToast(
-        `હપ્તો ₹${numValue} સેટ થયો!
-        બધા મહિનાઓમાં (જ્યાં હપ્તો 0 હતો) લાગુ થશે.`
-      );
-    }
-    // Refresh member data for current month
     const updatedData = await getMemberDataApi(selectedMonth);
     setMemberData(updatedData);
     setFilteredMemberData(updatedData);
@@ -616,7 +573,8 @@ const handleAddData = async () => {
   } finally {
     setIsMonthLoading(false);
   }
-};
+  };
+
   const handleAddNewMonth = async () => {
   let newMonth: string;
   if (months.length === 0 && establishedDate) {
@@ -639,8 +597,9 @@ const handleAddData = async () => {
   setNewMonthName(newMonth);
   // Open the confirmation dialog
   setIsAddMonthDialogOpen(true);
-};
-const confirmAddNewMonth = async () => {
+  };
+
+  const confirmAddNewMonth = async () => {
   if (!newMonthName || !/^\d{4}-\d{2}$/.test(newMonthName)) {
     showErrorToast("Invalid month format. Expected YYYY-MM");
     return;
@@ -648,15 +607,9 @@ const confirmAddNewMonth = async () => {
   try {
     setIsAddingMonth(true);
     setIsTableLoading(true);
-    if (memberData.some(row => !row.outerCheckbox)) {
-      showErrorToast("Your previous month’s installment is still pending.");
-    }
-    // Create new month in backend
     await initializeMonthDataApi(newMonthName);
-    // Fetch all months again
     const allMonths = await getAllMonthsApi();
     const validMonths = Array.isArray(allMonths) ? allMonths : [];
-    // Sort newest → oldest
     validMonths.sort((a, b) => {
       const dateA = new Date(a + "-01");
       const dateB = new Date(b + "-01");
@@ -664,22 +617,9 @@ const confirmAddNewMonth = async () => {
     });
     setMonths(validMonths);
     setSelectedMonth(newMonthName);
-    // Load data for new month
     const data = await getMemberDataApi(newMonthName);
     setMemberData(data);
-    setFilteredMemberData(data);
-    // ❗ IMPORTANT: Do NOT manually set previous month here.
-    // The useEffect([selectedMonth]) will automatically handle
-    // fetching previousMonthData correctly.
-    // Initialize manual update status for new month
-    // // const newStatus = { ...manualUpdateStatus };
-    // subUsers.forEach((subUser) => {
-    // const key = `${subUser._id}_${newMonthName}`;
-    // if (!(key in newStatus)) {
-    // newStatus[key] = false;
-    // }
-    // });
-   
+    setFilteredMemberData(data);   
     showSuccessToast(
       `મહિનો ${newMonthName} બનાવાયો! (Installment for this month will use backend's setInstallment)`
     );
@@ -701,17 +641,20 @@ const confirmAddNewMonth = async () => {
     setIsAddingMonth(false);
     setIsTableLoading(false);
   }
-};
-const cancelAddNewMonth = () => {
+  };
+
+  const cancelAddNewMonth = () => {
   setIsAddMonthDialogOpen(false);
   setNewMonthName("");
-};
+  };
+
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setNewMemberData({ ...newMemberData, subUserName: value });
     setTouched({ ...touched, subUserName: true });
     setErrors(getFilteredErrors());
   };
+
   const handlePhoneNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value;
     if (!value.startsWith("+91 ")) {
@@ -726,6 +669,7 @@ const cancelAddNewMonth = () => {
     setTouched({ ...touched, phoneNumber: true });
     setErrors(getFilteredErrors());
   };
+
   const handleDialogClose = (open: boolean) => {
     if (!open) {
       setNewMemberData({ subUserName: "", phoneNumber: "" });
@@ -733,14 +677,21 @@ const cancelAddNewMonth = () => {
       setTouched({ subUserName: false, phoneNumber: false });
     }
     setIsAddMemberDialogOpen(open);
-  };0
+  };
+
   const hasError = (field: keyof typeof touched) =>
     touched[field] && !!errors[field];
-const handleRowAction = (row: MemberData) => {
-  const currentInstallment = row.installment;
+
+  const handleRowAction = (row: MemberData) => {
+  const regularInstallment = row.installment === 0 && mandalMonthlyInstallment > 0
+    ? mandalMonthlyInstallment
+    : row.installment;
+
+  const totalInstallmentToShow = regularInstallment + (row.pendingInstallment || 0);
+
   setFormData({
     subUserId: row.subUser._id,
-    installment: currentInstallment.toString(),
+    installment: totalInstallmentToShow.toString(),  
     amount: row.amount?.toString() ?? "0",
     interest: row.interest?.toString() ?? "0",
     fine: row.fine?.toString() ?? "0",
@@ -748,11 +699,14 @@ const handleRowAction = (row: MemberData) => {
     newWithdrawal: row.newWithdrawal?.toString() ?? "0",
     outerCheckbox: row.outerCheckbox ?? false,
     innerCheckbox: row.innerCheckbox ?? false,
+    pendingInstallment: row.pendingInstallment?.toString() ?? "0",
   });
+
   setIsInstallmentPaid(row.innerCheckbox ?? false);
   setSelectedMemberName(row.subUser?.subUserName || "");
   setIsAddDialogOpen(true);
-};
+  };
+
   const handleInputFocus = (field: keyof Omit<FormData, "subUserId">) => {
     if (formData[field] === "0") {
       setFormData({
@@ -761,6 +715,7 @@ const handleRowAction = (row: MemberData) => {
       });
     }
   };
+
   const handleInputBlur = (field: keyof Omit<FormData, "subUserId">) => {
     if (formData[field] === "") {
       if (field === "installment") {
@@ -800,8 +755,11 @@ const handleRowAction = (row: MemberData) => {
       </div>
     );
   }
+
   return (
     <>
+      <div className="sticky top-0 z-40 bg-white">
+
       <PageHeader
         title="Monthly Ledger"
         description="View your monthly ledger, withdrawals, and interest earnings in one place."
@@ -1077,6 +1035,38 @@ const handleRowAction = (row: MemberData) => {
           </div>
         </div>
       </PageHeader>
+
+ {/* MOBILE: Sticky Search + Current Month */}
+      <div className="md:hidden sticky top-0 z-30 bg-white px-4 py-2 flex items-center justify-between gap-3">
+  {/* Search Bar */}
+  <div className="relative flex-1">
+    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+    <Input
+      type="search"
+      placeholder="Search members..."
+      value={searchQuery}
+      onChange={(e) => setSearchQuery(e.target.value)}
+      className="pl-10 w-full"
+    />
+  </div>
+  {/* Current Month Label - With Loading */}
+  {isMonthLoading ? (
+    <div className="px-3 py-2 bg-gray-100 rounded-md border text-xs font-medium text-gray-600 whitespace-nowrap animate-pulse">
+      <div className="h- w-16 bg-gray-300 rounded"></div>
+    </div>
+  ) : (
+    <div className="px-3 py-2 bg-yellow-50 rounded-md border text-xs font-medium text-gray-600 whitespace-nowrap">
+      {selectedMonth
+        ? new Date(selectedMonth + "-01").toLocaleString("default", {
+            month: "short",
+            year: "numeric",
+          })
+        : "—"}
+    </div>
+  )}
+      </div>
+      </div>
+
       <div>
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild></DialogTrigger>
@@ -1109,21 +1099,21 @@ const handleRowAction = (row: MemberData) => {
                 />
                 <input type="hidden" value={formData.subUserId} />
               </div>
-              <div className="space-y-2 sm:col-span-2 flex items-center gap-2">
-                <Checkbox
-                  id="installmentPaid"
-                  checked={isInstallmentPaid}
-                  onCheckedChange={(checked) =>
-                    setIsInstallmentPaid(checked as boolean)
-                  }
-                />
-                <Label
-                  htmlFor="installmentPaid"
-                  className="text-sm sm:text-base"
-                >
-                  હપ્તો ચૂકવાયો (Installment Paid)
-                </Label>
-              </div>
+              <div className="space-y-2 sm:col-span-2 flex items-center gap-3">
+  <Checkbox
+    id="installmentPaid"
+    checked={isInstallmentPaid}
+    onCheckedChange={(checked) => setIsInstallmentPaid(checked as boolean)}
+  />
+  <Label htmlFor="installmentPaid" className="text-sm sm:text-base font-medium">
+    હપ્તો ચૂકવાયો (વર્તમાન + બાકી હપ્તો બંને)
+    {formData.pendingInstallment && parseInt(formData.pendingInstallment) > 0 && (
+      <span className="text-red-600 text-xs ml-2">
+        (બાકી: ₹{formData.pendingInstallment})
+      </span>
+    )}
+  </Label>
+</div>
               <div className="space-y-2">
                 <Label htmlFor="installment" className="text-sm sm:text-base">
                   હપ્તો (Installment)
@@ -1253,7 +1243,8 @@ const handleRowAction = (row: MemberData) => {
                     withdrawal: "",
                     newWithdrawal: "",
                     outerCheckbox : false,
-                    innerCheckbox : false
+                    innerCheckbox : false,
+                    pendingInstallment: ""
                   });
                   setIsInstallmentPaid(true);
                   setSelectedMemberName("");
@@ -1289,6 +1280,7 @@ const handleRowAction = (row: MemberData) => {
           </DialogContent>
         </Dialog>
       </div>
+
       <Dialog open={isAddMonthDialogOpen} onOpenChange={setIsAddMonthDialogOpen} >
    <DialogContent
     className="max-w-[95vw] sm:max-w-md p-4 sm:p-6"
@@ -1363,6 +1355,7 @@ const handleRowAction = (row: MemberData) => {
     </div>
   </DialogContent>
       </Dialog>
+
       <Card className="hidden md:block lg:block">
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1511,7 +1504,7 @@ const handleRowAction = (row: MemberData) => {
                   ) : (
                     filteredMemberData.map((row, index) => {
                       const carriedForwardAmount =
-                        calculateCarriedForwardAmount(row.subUser._id);
+                        calculateCarriedForwardAmount(row?.subUser?._id);
                      
                      const isChecked = row.outerCheckbox;
                      
@@ -1539,13 +1532,25 @@ const handleRowAction = (row: MemberData) => {
                           <TableCell className="text-center text-xs md:text-sm">
                             <div className="flex flex-col items-center">
                               <div className="flex items-center justify-center gap-2">
-                                <span
-                                  className={`font-medium ${
-                                    isChecked ? "text-green-600" : "text-gray-500"
-                                  }`}
-                                >
-                                  ₹{totalInstallmentDisplay?.toLocaleString()}
-                                </span>
+                               {(() => {
+  const installmentInfo = getDisplayInstallmentValue(row);
+  return (
+    <div className="flex flex-col items-center">
+      <span
+        className={`font-medium ${
+          isChecked ? "text-green-600" : "text-gray-500"
+        }`}
+      >
+        ₹{installmentInfo.value.toLocaleString()}
+      </span>
+      {installmentInfo.hasPending && (
+        <span className="text-[10px] text-red-600 mt-0.5 font-medium">
+          (empty installment : {installmentInfo.pendingAmount})
+        </span>
+      )}
+    </div>
+  );
+})()}
                               </div>
                             
                             </div>
@@ -1599,10 +1604,10 @@ const handleRowAction = (row: MemberData) => {
                               variant="outline"
                               size="sm"
                               onClick={() => handleRowAction(row)}
-                              disabled={updatingMemberId === row.subUser._id}
+                              disabled={updatingMemberId === row?.subUser?._id}
                               className="text-xs h-8 px-2 md:text-sm md:h-9 md:px-3"
                             >
-                              {updatingMemberId === row.subUser._id ? (
+                              {updatingMemberId === row?.subUser?._id ? (
                                 <Loader
                                   size="sm"
                                   variant="primary"
@@ -1625,98 +1630,62 @@ const handleRowAction = (row: MemberData) => {
           </div>
         </CardContent>
       </Card>
-     {/* MOBILE: Sticky Search + Current Month */}
-      <div className="md:hidden sticky top-0 z-30 bg-white px-4 py-2 flex items-center justify-between gap-3">
-  {/* Search Bar */}
-  <div className="relative flex-1">
-    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
-    <Input
-      type="search"
-      placeholder="Search members..."
-      value={searchQuery}
-      onChange={(e) => setSearchQuery(e.target.value)}
-      className="pl-10 w-full"
-    />
-  </div>
-  {/* Current Month Label - With Loading */}
-  {isMonthLoading ? (
-    <div className="px-3 py-2 bg-gray-100 rounded-md border text-xs font-medium text-gray-600 whitespace-nowrap animate-pulse">
-      <div className="h- w-16 bg-gray-300 rounded"></div>
-    </div>
-  ) : (
-    <div className="px-3 py-2 bg-yellow-50 rounded-md border text-xs font-medium text-gray-600 whitespace-nowrap">
-      {selectedMonth
-        ? new Date(selectedMonth + "-01").toLocaleString("default", {
-            month: "short",
-            year: "numeric",
-          })
-        : "—"}
-    </div>
-  )}
-      </div>
+
+    
+
     {/* MOBILE 2-COLUMN CARD GRID */}
       <div
   className="md:block lg:block overflow-y-auto px-4"
   style={{ maxHeight: "calc(100vh - 140px)", paddingBottom: "80px" }}
 >
   <div className="md:hidden grid grid-cols-2 gap-2 mt-3">
-    {/* Skeleton Loading for Mobile */}
     {isMonthLoading || isTableDataLoading ? (
       Array.from({ length: 6 }).map((_, index) => (
         <div
           key={`mobile-skeleton-${index}`}
           className="bg-gray-100 border border-gray-200 rounded-md p-2 flex flex-col gap-2 animate-pulse"
         >
-          {/* Checkbox + Name Skeleton */}
           <div className="flex items-center justify-between">
             <div className="h-4 w-4 bg-gray-300 rounded"></div>
             <div className="h-4 w-24 bg-gray-300 rounded ml-2 flex-1"></div>
             <div className="h-4 w-6 bg-gray-300 rounded ml-1"></div>
           </div>
          
-          {/* Installment Skeleton */}
           <div className="flex justify-between">
             <div className="h-3 w-12 bg-gray-300 rounded"></div>
             <div className="h-3 w-16 bg-gray-300 rounded"></div>
           </div>
          
-          {/* Amount Skeleton */}
           <div className="flex justify-between">
             <div className="h-3 w-12 bg-gray-300 rounded"></div>
             <div className="h-3 w-16 bg-gray-300 rounded"></div>
           </div>
          
-          {/* Interest Skeleton */}
           <div className="flex justify-between">
             <div className="h-3 w-8 bg-gray-300 rounded"></div>
             <div className="h-3 w-12 bg-gray-300 rounded"></div>
           </div>
          
-          {/* Fine Skeleton */}
           <div className="flex justify-between">
             <div className="h-3 w-8 bg-gray-300 rounded"></div>
             <div className="h-3 w-12 bg-gray-300 rounded"></div>
           </div>
          
-          {/* Withdrawal Skeleton */}
           <div className="flex justify-between">
             <div className="h-3 w-16 bg-gray-300 rounded"></div>
             <div className="h-3 w-12 bg-gray-300 rounded"></div>
           </div>
          
-          {/* New Withdrawal Skeleton */}
           <div className="flex justify-between">
             <div className="h-3 w-16 bg-gray-300 rounded"></div>
             <div className="h-3 w-12 bg-gray-300 rounded"></div>
           </div>
          
-          {/* Total Skeleton */}
           <div className="flex justify-between">
             <div className="h-3 w-20 bg-gray-300 rounded"></div>
             <div className="h-3 w-16 bg-gray-300 rounded"></div>
           </div>
          
-          {/* Button Skeleton */}
           <div className="mt-2 w-full h-8 bg-gray-300 rounded"></div>
         </div>
       ))
@@ -1740,7 +1709,7 @@ const handleRowAction = (row: MemberData) => {
       filteredMemberData.map((row, index) => {
       
         const carriedForwardAmount = calculateCarriedForwardAmount(
-          row.subUser._id
+          row?.subUser?._id
         );
         const isChecked = row.outerCheckbox;
        
@@ -1762,7 +1731,7 @@ const handleRowAction = (row: MemberData) => {
                 "
               />
               <p className="font-semibold text-[11px] text-gray-500 truncate flex-1 ml-2">
-                {row.subUser.subUserName}
+                {row?.subUser?.subUserName}
               </p>
               <span className="text-[10px] text-green-700 ml-1">
                 #{index + 1}
@@ -1771,18 +1740,30 @@ const handleRowAction = (row: MemberData) => {
             <div className="flex justify-between text-[10px]">
   <span className="text-gray-600">હપ્તો</span>
   <div className="flex flex-col items-end">
-    <span
-      className={`font-semibold ${
-        isChecked ? "text-green-600" : "text-gray-500"
-      }`}
-    >
-      ₹{totalInstallmentDisplay}
-    </span>
-    {row.installment === 0 && mandalMonthlyInstallment > 0 && (
-      <span className="text-[8px] text-gray-400 mt-0.5">
-        (Default: ₹{mandalMonthlyInstallment})
-      </span>
-    )}
+    {(() => {
+      const installmentInfo = getDisplayInstallmentValue(row);
+      return (
+        <>
+          <span
+            className={`font-semibold ${
+              row.outerCheckbox ? "text-green-600" : "text-gray-500"
+            }`}
+          >
+            ₹{installmentInfo.value.toLocaleString()}
+          </span>
+          {installmentInfo.hasPending && (
+            <span className="text-[9px] text-red-600 font-medium mt-0.5">
+              (empty installment : {installmentInfo.pendingAmount})
+            </span>
+          )}
+          {row.installment === 0 && mandalMonthlyInstallment > 0 && !installmentInfo.hasPending && (
+            <span className="text-[8px] text-gray-400 mt-0.5">
+              (Default: ₹{mandalMonthlyInstallment})
+            </span>
+          )}
+        </>
+      );
+    })()}
   </div>
 </div>
         {/* <div className="text-[10px] text-gray-500 text-right">
@@ -1990,6 +1971,7 @@ const handleRowAction = (row: MemberData) => {
     </div>
   )}
       </div>
+
      <MobileFooter>
   <div
     className="

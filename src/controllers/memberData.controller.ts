@@ -49,6 +49,7 @@ export async function createMemberData(request: AuthenticatedRequest) {
       fine,
       withdrawal,
       newWithdrawal,
+      pendingInstallment
     } = validateMemberDataCreation(body);
 
     const innerChecked = body.innerCheckbox === true;   
@@ -76,6 +77,7 @@ export async function createMemberData(request: AuthenticatedRequest) {
       existing.newWithdrawal = newWithdrawal;
       existing.total = existing.installment + existing.interest;
       existing.innerCheckbox = innerChecked;
+      existing.pendingInstallment = pendingInstallment
 
       await existing.save();
       return NextResponse.json({ message: "Member data updated" }, { status: 200 });
@@ -95,7 +97,8 @@ export async function createMemberData(request: AuthenticatedRequest) {
       newWithdrawal,
       total: actualInstallment + interest,
       outerCheckbox: outerChecked,  
-      innerCheckbox: innerChecked,   
+      innerCheckbox: innerChecked,
+      pendingInstallment   
     });
 
     await newRecord.save();
@@ -182,17 +185,27 @@ export async function initializeMonthData(request: AuthenticatedRequest) {
 
       if (existingData) return existingData;
 
-      let installment = 0;
+      const installment = mandal.setInstallment || 0;
       let amount = 0;
+      let pendingInstallment = 0;
 
       const prev = prevDataMap.get(subUserId);
 
       if (prev) {
         const carriedForwardAmount =
           (prev.amount || 0) + (prev.newWithdrawal || 0) - (prev.withdrawal || 0);
-
-        installment = prev.installment;     
         amount = carriedForwardAmount > 0 ? carriedForwardAmount : 0;
+        
+        if (prev.outerCheckbox === false) {
+          pendingInstallment = prev.installment || 0;
+        } else if (prev.outerCheckbox === true) {
+          const paidAmount = prev.total || 0; 
+          const expectedAmount = installment || 0;
+          
+          if (paidAmount < expectedAmount) {
+            pendingInstallment = expectedAmount - paidAmount;
+          }
+        }
       }
 
       const newData = {
@@ -200,12 +213,15 @@ export async function initializeMonthData(request: AuthenticatedRequest) {
         subUser: subUser._id,
         month,
         installment,
-        amount,
+        amount, 
         interest: 0,
         fine: 0,
         withdrawal: 0,
         newWithdrawal: 0,
         total: installment,          
+        pendingInstallment: pendingInstallment,
+        outerCheckbox: false,
+        innerCheckbox: false,
       };
 
       const saved = new MemberData(newData);
