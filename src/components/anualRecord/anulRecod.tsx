@@ -102,82 +102,99 @@ export default function AnnualRecordPage() {
     fetchAllData();
   }, []);
 
-  // Calculate ANNUAL totals from ALL months data
-  const calculations = useMemo(() => {
-    // Combine all data from all months
-    const allData = allMonthsData.flatMap(month => month.data);
-    
-    // Get unique members from all months
-    const uniqueMemberIds = new Set(allData.map(row => row.subUser?._id).filter(Boolean));
-    
-    const totalInstallments = allData.reduce(
-      (sum, row) => sum + (row.installment || 0),
-      0
-    );
-    const totalAmount = allData.reduce((sum, row) => sum + (row.amount || 0), 0);
-    const totalInterest = allData.reduce(
-      (sum, row) => sum + (row.interest || 0),
-      0
-    );
-    const totalFines = allData.reduce((sum, row) => sum + (row.fine || 0), 0);
-    const totalWithdrawals = allData.reduce(
-      (sum, row) => sum + (row.withdrawal || 0),
-      0
-    );
-    const totalNewWithdrawals = allData.reduce(
-      (sum, row) => sum + (row.newWithdrawal || 0),
-      0
-    );
-    const totalMembers = uniqueMemberIds.size; // Count unique members across all months
+ // Calculate ANNUAL totals from ALL months data — respecting outerCheckbox
+const calculations = useMemo(() => {
+  // Combine all data from all months
+  const allData = allMonthsData.flatMap(month => month.data);
 
-    const totalName = totalInstallments + totalInterest + totalWithdrawals;
-    const bandSilak = totalName - totalNewWithdrawals;
-    const Mandalcash = 0 + bandSilak;
-    const interestPerPerson =
-      totalMembers > 0 ? totalInterest / totalMembers : 0;
-    const perPerson = totalMembers > 0 ? bandSilak / totalMembers : 0;
+  // Get unique members across all months
+  const uniqueMemberIds = new Set(
+    allData.map(row => row.subUser?._id).filter(Boolean)
+  );
+
+  // Total Installments: ONLY count if outerCheckbox === true
+  const totalInstallments = allData.reduce((sum, row) => {
+    if (!row.outerCheckbox) return sum;
+    return sum + (row.installment || 0);
+  }, 0);
+
+  const totalAmount = allData.reduce((sum, row) => sum + (row.amount || 0), 0);
+  const totalInterest = allData.reduce(
+    (sum, row) => sum + (row.interest || 0),
+    0
+  );
+  const totalFines = allData.reduce((sum, row) => sum + (row.fine || 0), 0);
+  const totalWithdrawals = allData.reduce(
+    (sum, row) => sum + (row.withdrawal || 0),
+    0
+  );
+  const totalNewWithdrawals = allData.reduce(
+    (sum, row) => sum + (row.newWithdrawal || 0),
+    0
+  );
+
+  const totalMembers = uniqueMemberIds.size;
+
+  // totalName = installments (only paid ones) + interest + withdrawals
+  const totalName = allData.reduce((sum, row) => {
+    let installmentPart = 0;
+    if (row.outerCheckbox) {
+      installmentPart = row.installment || 0;
+    }
+    return sum + installmentPart + (row.interest || 0) + (row.withdrawal || 0);
+  }, 0);
+
+  const bandSilak = totalName - totalNewWithdrawals;
+  const Mandalcash = bandSilak; // as per your existing logic
+
+  const interestPerPerson =
+    totalMembers > 0 ? totalInterest / totalMembers : 0;
+  const perPerson = totalMembers > 0 ? bandSilak / totalMembers : 0;
+
+  return {
+    totalInstallments,
+    totalAmount,
+    totalInterest,
+    totalFines,
+    totalWithdrawals,
+    totalNewWithdrawals,
+    grandTotal: 0,
+    totalMembers,
+    totalName,
+    bandSilak,
+    Mandalcash,
+    interestPerPerson,
+    perPerson,
+  };
+}, [allMonthsData]);
+
+const monthlySummaries = useMemo(() => {
+  return allMonthsData.map(monthData => {
+    const monthInstallments = monthData.data.reduce((sum, row) => {
+      if (!row.outerCheckbox) return sum;
+      return sum + (row.installment || 0);
+    }, 0);
+
+    const monthInterest = monthData.data.reduce((sum, row) => sum + (row.interest || 0), 0);
+    const monthWithdrawals = monthData.data.reduce((sum, row) => sum + (row.withdrawal || 0), 0);
+    const monthNewWithdrawals = monthData.data.reduce((sum, row) => sum + (row.newWithdrawal || 0), 0);
+    const monthFines = monthData.data.reduce((sum, row) => sum + (row.fine || 0), 0);
+
+    const monthTotalName = monthInstallments + monthInterest + monthWithdrawals;
+    const monthBandSilak = monthTotalName - monthNewWithdrawals;
 
     return {
-      totalInstallments,
-      totalAmount,
-      totalInterest,
-      totalFines,
-      totalWithdrawals,
-      totalNewWithdrawals,
-      grandTotal: 0,
-      totalMembers,
-      totalName,
-      bandSilak,
-      Mandalcash,
-      interestPerPerson,
-      perPerson,
+      month: monthData.month,
+      installments: monthInstallments,
+      interest: monthInterest,
+      withdrawals: monthWithdrawals,
+      newWithdrawals: monthNewWithdrawals,
+      fines: monthFines,
+      totalName: monthTotalName,
+      bandSilak: monthBandSilak
     };
-  }, [allMonthsData]);
-
-  // Calculate month-by-month summary
-  const monthlySummaries = useMemo(() => {
-    return allMonthsData.map(monthData => {
-      const monthInstallments = monthData.data.reduce((sum, row) => sum + (row.installment || 0), 0);
-      const monthInterest = monthData.data.reduce((sum, row) => sum + (row.interest || 0), 0);
-      const monthWithdrawals = monthData.data.reduce((sum, row) => sum + (row.withdrawal || 0), 0);
-      const monthNewWithdrawals = monthData.data.reduce((sum, row) => sum + (row.newWithdrawal || 0), 0);
-      const monthFines = monthData.data.reduce((sum, row) => sum + (row.fine || 0), 0);
-      const monthTotalName = monthInstallments + monthInterest + monthWithdrawals;
-      const monthBandSilak = monthTotalName - monthNewWithdrawals;
-
-      return {
-        month: monthData.month,
-        installments: monthInstallments,
-        interest: monthInterest,
-        withdrawals: monthWithdrawals,
-        newWithdrawals: monthNewWithdrawals,
-        fines: monthFines,
-        totalName: monthTotalName,
-        bandSilak: monthBandSilak
-      };
-    });
-  }, [allMonthsData]);
-
+  });
+}, [allMonthsData]);
   // Calculate possible vs actual installments
   const installmentAnalysis = useMemo(() => {
     // Assuming monthly installment is 1000 (you can get this from mandal data)
@@ -201,21 +218,119 @@ export default function AnnualRecordPage() {
   }, [calculations.totalInstallments, months.length, uniqueMembers.length]);
 
   if (isLoading) {
-    return (
-      <div className="p-4 md:p-6 space-y-6">
-        <div className="space-y-4">
-          <div className="h-8 w-48 md:w-64 bg-gray-200 rounded animate-pulse" />
-          <div className="h-4 w-72 md:w-96 bg-gray-200 rounded animate-pulse" />
-        </div>
+  return (
+    <div className="space-y-6 md:space-y-8 p-4 md:p-6">
+      {/* Header Skeleton */}
+      <div className="space-y-3">
+        <div className="h-8 w-64 md:w-80 bg-gray-200 rounded animate-pulse" />
+        <div className="h-4 w-72 md:w-96 bg-gray-200 rounded animate-pulse" />
+      </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <SkeletonCard key={i} />
+      {/* Stats Cards Skeleton */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="bg-white rounded-lg border border-gray-200 p-5">
+            <div className="flex justify-between items-start mb-4">
+              <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
+              <div className="h-4 w-4 bg-gray-200 rounded-full animate-pulse" />
+            </div>
+            <div className="h-8 w-20 bg-gray-200 rounded animate-pulse mb-2" />
+            <div className="h-3 w-32 bg-gray-200 rounded animate-pulse" />
+          </div>
+        ))}
+      </div>
+
+      {/* Installment Analysis Skeleton */}
+      <div className="bg-white rounded-lg border border-gray-200 p-5">
+        <div className="space-y-3 mb-6">
+          <div className="h-6 w-48 bg-gray-200 rounded animate-pulse" />
+          <div className="h-4 w-64 bg-gray-200 rounded animate-pulse" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="space-y-3">
+              <div className="h-4 w-36 bg-gray-200 rounded animate-pulse" />
+              <div className="h-8 w-32 bg-gray-200 rounded animate-pulse" />
+              <div className="h-3 w-48 bg-gray-200 rounded animate-pulse" />
+            </div>
           ))}
         </div>
       </div>
-    );
-  }
+
+      {/* Monthly Breakdown Table Skeleton */}
+      <div className="bg-white rounded-lg border border-gray-200 p-5">
+        <div className="space-y-3 mb-6">
+          <div className="h-6 w-48 bg-gray-200 rounded animate-pulse" />
+          <div className="h-4 w-64 bg-gray-200 rounded animate-pulse" />
+        </div>
+        <div className="space-y-4">
+          {/* Table Header */}
+          <div className="grid grid-cols-5 gap-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-4 bg-gray-200 rounded animate-pulse" />
+            ))}
+          </div>
+          {/* Table Rows */}
+          {Array.from({ length: 5 }).map((_, rowIndex) => (
+            <div key={rowIndex} className="grid grid-cols-5 gap-4 py-4 border-b">
+              {Array.from({ length: 5 }).map((_, colIndex) => (
+                <div key={colIndex} className={`h-4 bg-gray-200 rounded animate-pulse ${colIndex === 0 ? 'w-24' : 'w-16'}`} />
+              ))}
+            </div>
+          ))}
+          {/* Total Row */}
+          <div className="grid grid-cols-5 gap-4 py-4 bg-gray-50 rounded">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-4 bg-gray-200 rounded animate-pulse" />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Detailed Breakdown Skeleton */}
+      <div className="bg-white rounded-lg border border-gray-200 p-5">
+        <div className="space-y-3 mb-6">
+          <div className="h-6 w-64 bg-gray-200 rounded animate-pulse" />
+          <div className="h-4 w-72 bg-gray-200 rounded animate-pulse" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+          {Array.from({ length: 2 }).map((_, colIndex) => (
+            <div key={colIndex} className="space-y-4">
+              {Array.from({ length: 5 }).map((_, rowIndex) => (
+                <div key={rowIndex} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                  <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
+                  <div className="h-4 w-20 bg-gray-200 rounded animate-pulse" />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+        <div className="space-y-4 mt-6">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="flex justify-between items-center p-3 bg-gray-100 rounded-lg">
+              <div className="h-4 w-40 bg-gray-200 rounded animate-pulse" />
+              <div className="h-6 w-24 bg-gray-200 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Annual Performance Overview Skeleton */}
+      <div className="bg-white rounded-lg border border-gray-200 p-5">
+        <div className="h-6 w-48 bg-gray-200 rounded animate-pulse mb-6" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="p-4 bg-gray-50 rounded-lg space-y-3">
+              <div className="h-4 w-36 bg-gray-200 rounded animate-pulse" />
+              <div className="h-8 w-28 bg-gray-200 rounded animate-pulse" />
+              <div className="h-3 w-40 bg-gray-200 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
   return (
     <>

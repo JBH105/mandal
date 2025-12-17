@@ -25,89 +25,102 @@ const getPreviousMonth = (month: string): string => {
   return `${year}-${mon.toString().padStart(2, "0")}`;
 };
 
-export async function createMemberData(request: AuthenticatedRequest) {
-  try {
-    const authResult = await authMiddleware(request, "mandal");
-    if (authResult) return authResult;
+  export async function createMemberData(request: AuthenticatedRequest) {
+    try {
+      const authResult = await authMiddleware(request, "mandal");
+      if (authResult) return authResult;
 
-    await connectToDB();
+      await connectToDB();
 
-    const { decoded } = request;
-    const mandal = await Mandal.findById(decoded?.id);
-    if (!mandal) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+      const { decoded } = request;
+      const mandal = await Mandal.findById(decoded?.id);
+      if (!mandal)
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const body = await request.json();
+      const body = await request.json();
+      const {
+        subUserId,
+        month,
+        installment,
+        amount,
+        interest,
+        fine,
+        withdrawal,
+        newWithdrawal,
+      } = validateMemberDataCreation(body);
 
-    const {
-      subUserId,
-      month,
-      installment,
-      amount,
-      interest,
-      fine,
-      withdrawal,
-      newWithdrawal,
-      pendingInstallment
-    } = validateMemberDataCreation(body);
+      const expected = mandal.setInstallment || 0;
+      let remaining = installment;
 
-    const innerChecked = body.innerCheckbox === true;   
-    const outerChecked = innerChecked;
+      
+      const current = await MemberData.findOne({
+        mandal: mandal._id,
+        subUser: subUserId,
+        month,
+      });
 
-    const existing = await MemberData.findOne({
-      mandal: mandal._id,
-      subUser: subUserId,
-      month,
-    });
+      if (!current)
+        return NextResponse.json(
+          { error: "Current month not found" },
+          { status: 400 }
+        );
 
-    if (existing) {
-      if (innerChecked) {
-        existing.installment = installment;
-        existing.outerCheckbox = true;
+      if (remaining >= expected) {
+        remaining -= expected;
+        current.outerCheckbox = true;
+        current.pendingInstallment = 0;
       } else {
-        existing.installment = 0;
-        existing.outerCheckbox = false;
+        current.outerCheckbox = false;
+        current.pendingInstallment = expected - remaining;
+        remaining = 0;
       }
 
-      existing.amount = amount;
-      existing.interest = interest;
-      existing.fine = fine;
-      existing.withdrawal = withdrawal;
-      existing.newWithdrawal = newWithdrawal;
-      existing.total = existing.installment + existing.interest;
-      existing.innerCheckbox = innerChecked;
-      existing.pendingInstallment = pendingInstallment
+      current.installment = installment;
+      current.amount = amount;
+      current.interest = interest;
+      current.fine = fine;
+      current.withdrawal = withdrawal;
+      current.newWithdrawal = newWithdrawal;
+      current.total = installment + interest;
+      current.innerCheckbox = current.outerCheckbox;
 
-      await existing.save();
-      return NextResponse.json({ message: "Member data updated" }, { status: 200 });
+      await current.save();
+
+      if (remaining > 0) {
+        const unpaidMonths = await MemberData.find({
+          mandal: mandal._id,
+          subUser: subUserId,
+          outerCheckbox: false,
+          month: { $lt: month },
+        }).sort({ month: 1 }); 
+
+        for (const m of unpaidMonths) {
+          if (remaining <= 0) break;
+
+          const due = expected;
+
+          if (remaining >= due) {
+            remaining -= due;
+            m.pendingInstallment = 0;
+            m.outerCheckbox = true;
+          } else {
+            m.pendingInstallment = expected - remaining;
+            remaining = 0;
+          }
+
+          await m.save();
+        }
+      }
+
+      return NextResponse.json(
+        { message: "Member data saved successfully" },
+        { status: 200 }
+      );
+    } catch (error) {
+      console.error("createMemberData error:", error);
+      return NextResponse.json({ error: "Server error" }, { status: 500 });
     }
-
-    const actualInstallment = innerChecked ? installment : 0;
-
-    const newRecord = new MemberData({
-      mandal: mandal._id,
-      subUser: subUserId,
-      month,
-      installment: actualInstallment,
-      amount,
-      interest,
-      fine,
-      withdrawal,
-      newWithdrawal,
-      total: actualInstallment + interest,
-      outerCheckbox: outerChecked,  
-      innerCheckbox: innerChecked,
-      pendingInstallment   
-    });
-
-    await newRecord.save();
-
-  } catch (error) {
-    console.error("createMemberData error:", error);
-    return NextResponse.json({ error: "Server error" }, { status:500 });
   }
-}
 
 export async function getMemberData(request: AuthenticatedRequest) {
   try {
@@ -163,16 +176,14 @@ export async function initializeMonthData(request: AuthenticatedRequest) {
     const body = await request.json();
     const { month } = validateMonthInitialization(body);
 
-    const prevMonth = getPreviousMonth(month);
-
     const subUsers = await MandalSubUser.find({ mandal: mandal._id });
 
-    const prevData = await MemberData.find({
+    const allPreviousMonthsData = await MemberData.find({
       mandal: mandal._id,
-      month: prevMonth,
-    });
+      month: { $lt: month }, // only previous months
+    }).lean();
 
-    const prevDataMap = new Map(prevData.map((d) => [d.subUser.toString(), d]));
+    const installment = mandal.setInstallment || 0;
 
     const memberDataPromises = subUsers.map(async (subUser) => {
       const subUserId = subUser._id.toString();
@@ -182,44 +193,52 @@ export async function initializeMonthData(request: AuthenticatedRequest) {
         subUser: subUser._id,
         month,
       });
-
       if (existingData) return existingData;
 
-      const installment = mandal.setInstallment || 0;
-      let amount = 0;
-      let pendingInstallment = 0;
+      let totalPendingInstallment = 0;
+      let carriedForwardAmount = 0;
 
-      const prev = prevDataMap.get(subUserId);
+      const userPreviousRecords = allPreviousMonthsData
+        .filter((d) => d.subUser.toString() === subUserId)
+        .sort((a, b) => a.month.localeCompare(b.month));
 
-      if (prev) {
-        const carriedForwardAmount =
-          (prev.amount || 0) + (prev.newWithdrawal || 0) - (prev.withdrawal || 0);
-        amount = carriedForwardAmount > 0 ? carriedForwardAmount : 0;
-        
+      /* ========= FIXED LOGIC ========= */
+      for (const prev of userPreviousRecords) {
+        // ✅ pending is per-month only, based on checkbox
         if (prev.outerCheckbox === false) {
-          pendingInstallment = prev.installment || 0;
-        } else if (prev.outerCheckbox === true) {
-          const paidAmount = prev.total || 0; 
-          const expectedAmount = installment || 0;
-          
-          if (paidAmount < expectedAmount) {
-            pendingInstallment = expectedAmount - paidAmount;
-          }
+          totalPendingInstallment += installment; // NOT cumulative from DB
+        }
+
+        // amount carry forward (unchanged)
+        const balance =
+          (prev.amount || 0) +
+          (prev.newWithdrawal || 0) -
+          (prev.withdrawal || 0);
+
+        if (balance > 0) {
+          carriedForwardAmount += balance;
         }
       }
+      /* ================================= */
+
+      const amount = carriedForwardAmount > 0 ? carriedForwardAmount : 0;
+
+      // if any pending exists, current month installment = 0
+      const newMonthInstallment =
+        totalPendingInstallment > 0 ? 0 : installment;
 
       const newData = {
         mandal: mandal._id,
         subUser: subUser._id,
         month,
-        installment,
-        amount, 
+        installment: newMonthInstallment,
+        amount,
         interest: 0,
         fine: 0,
         withdrawal: 0,
         newWithdrawal: 0,
-        total: installment,          
-        pendingInstallment: pendingInstallment,
+        total: newMonthInstallment,
+        pendingInstallment: totalPendingInstallment, // sum of per-month pendings
         outerCheckbox: false,
         innerCheckbox: false,
       };
@@ -235,7 +254,6 @@ export async function initializeMonthData(request: AuthenticatedRequest) {
       { message: "Month data initialized successfully", memberData },
       { status: 201 }
     );
-
   } catch (error) {
     console.log("🚀 ~ initializeMonthData ~ error:", error);
     return NextResponse.json(

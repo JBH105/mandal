@@ -63,9 +63,9 @@ interface FormData {
   fine: string;
   withdrawal: string;
   newWithdrawal: string;
-  outerCheckbox : boolean;
-  innerCheckbox : boolean ;
-  pendingInstallment :string
+  outerCheckbox: boolean;
+  innerCheckbox: boolean;
+  pendingInstallment: string;
 }
 export interface NewMemberForm {
   subUserName: string;
@@ -92,10 +92,11 @@ export default function AnalyticsPage() {
     fine: "",
     withdrawal: "",
     newWithdrawal: "",
-    innerCheckbox : false,
+    innerCheckbox: false,
     outerCheckbox: false,
-    pendingInstallment: ""
+    pendingInstallment: "",
   });
+  console.log("🚀 ~ AnalyticsPage ~ installment :", formData?.installment);
   const [selectedMemberName, setSelectedMemberName] = useState<string>("");
   const [isAddMemberDialogOpen, setIsAddMemberDialogOpen] =
     useState<boolean>(false);
@@ -127,11 +128,15 @@ export default function AnalyticsPage() {
   const [isInstallmentPaid, setIsInstallmentPaid] = useState<boolean>(true);
   const [isHaptoSet, setIsHaptoSet] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [isAddMonthDialogOpen, setIsAddMonthDialogOpen] = useState<boolean>(false);
-const [newMonthName, setNewMonthName] = useState<string>("");
-const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
- 
- 
+  const [isAddMonthDialogOpen, setIsAddMonthDialogOpen] =
+    useState<boolean>(false);
+  const [newMonthName, setNewMonthName] = useState<string>("");
+  const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
+
+  // Add to your existing state variables
+  const [installmentError, setInstallmentError] = useState<string>("");
+  const [requiredInstallmentAmount, setRequiredInstallmentAmount] =
+    useState<number>(0);
 
   useEffect(() => {
     if (searchQuery.trim() === "") {
@@ -226,37 +231,35 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
   }, []);
 
   useEffect(() => {
-  if (!selectedMonth) return;
+    if (!selectedMonth) return;
 
-  const fetchMemberData = async () => {
-    setIsMonthLoading(true);
-    setIsTableDataLoading(true);
+    const fetchMemberData = async () => {
+      setIsMonthLoading(true);
+      setIsTableDataLoading(true);
 
-    try {
-      const data: MemberData[] = await getMemberDataApi(selectedMonth);
-      setMemberData(data);
-      setFilteredMemberData(data);
+      try {
+        const data: MemberData[] = await getMemberDataApi(selectedMonth);
+        setMemberData(data);
+        setFilteredMemberData(data);
 
-      const currentMonthIndex = months.indexOf(selectedMonth);
-      if (currentMonthIndex > 0 && months.length > 1) {
-        const previousMonth = months[currentMonthIndex - 1];
-        const prevData: MemberData[] = await getMemberDataApi(previousMonth);
-        setPreviousMonthData(prevData);
-      } else {
-        setPreviousMonthData([]);
+        const currentMonthIndex = months.indexOf(selectedMonth);
+        if (currentMonthIndex > 0 && months.length > 1) {
+          const previousMonth = months[currentMonthIndex - 1];
+          const prevData: MemberData[] = await getMemberDataApi(previousMonth);
+          setPreviousMonthData(prevData);
+        } else {
+          setPreviousMonthData([]);
+        }
+      } catch (error) {
+        console.log(error);
+        showErrorToast("Error fetching member data:");
+      } finally {
+        setIsMonthLoading(false);
+        setIsTableDataLoading(false);
       }
+    };
 
-    } catch (error) {
-      console.log(error);
-      showErrorToast("Error fetching member data:");
-    } finally {
-      setIsMonthLoading(false);
-      setIsTableDataLoading(false);
-    }
-  };
-
-  fetchMemberData();
-
+    fetchMemberData();
   }, [selectedMonth, months]);
 
   const getCurrentMonth = () => {
@@ -267,8 +270,8 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
   };
 
   const calculations = useMemo(() => {
-    // Calculate total installments - use mandal's default for rows with 0 installment
     const totalInstallments = memberData.reduce((sum, row) => {
+      if (!row.outerCheckbox) return sum;
       const rowInstallment =
         row.installment === 0 && mandalMonthlyInstallment > 0
           ? mandalMonthlyInstallment
@@ -290,8 +293,10 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
       0
     );
     const totalMembers = memberData.length;
-    // For totalName calculation, also use the correct installment value
     const totalName = memberData.reduce((sum, row) => {
+      if (!row.outerCheckbox) {
+        return sum + row.interest + row.withdrawal;
+      }
       const rowInstallment =
         row.installment === 0 && mandalMonthlyInstallment > 0
           ? mandalMonthlyInstallment
@@ -321,20 +326,18 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
   }, [memberData, mandalMonthlyInstallment]);
 
   const calculateCarriedForwardAmount = (memberId: string) => {
-  // Only apply carried forward for the NEWEST month
-  if (months[0] !== selectedMonth) return 0;
-  // Get previous month
-  if (months.length < 2) return 0;
-  const previousMonth = months[1]; // newest = 0, previous = 1
-  const previousData = previousMonthData.find(
-    (data) => data.subUser._id === memberId
-  );
-  if (!previousData) return 0;
-  return (
-    previousData.amount +
-    previousData.newWithdrawal -
-    previousData.withdrawal
-  );
+    // Only apply carried forward for the NEWEST month
+    if (months[0] !== selectedMonth) return 0;
+    // Get previous month
+    if (months.length < 2) return 0;
+    const previousMonth = months[1]; // newest = 0, previous = 1
+    const previousData = previousMonthData.find(
+      (data) => data.subUser._id === memberId
+    );
+    if (!previousData) return 0;
+    return (
+      previousData.amount + previousData.newWithdrawal - previousData.withdrawal
+    );
   };
 
   const getFilteredErrors = () => {
@@ -350,15 +353,17 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
   };
 
   const getDisplayInstallmentValue = (row: MemberData) => {
-  const hasPending = row.pendingInstallment > 0;
-  const showDefaultHapto = row.installment === 0 && mandalMonthlyInstallment > 0;
-  const displayValue = showDefaultHapto ? mandalMonthlyInstallment : row.installment;
+    // 1️⃣ This month's hapto
+    const monthHapto =
+      row.installment === 0 && mandalMonthlyInstallment > 0
+        ? mandalMonthlyInstallment
+        : row.installment || mandalMonthlyInstallment;
 
-  return {
-    value: displayValue,
-    hasPending,
-    pendingAmount: row.pendingInstallment,
-  };
+    return {
+      value: monthHapto, // ✅ month-specific
+      hasPending: row.pendingInstallment > 0,
+      pendingAmount: row.pendingInstallment,
+    };
   };
 
   const handleAddMember = async () => {
@@ -432,13 +437,17 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
       } else if (validMonths.length > 0) {
         // FIXED: Only initialize data for the target month, not all months
         const targetMonth = selectedMonth || validMonths[0];
-        
+
         try {
           await initializeMonthDataApi(targetMonth);
         } catch (err) {
-          console.warn("initializeMonthDataApi failed for month", targetMonth, err);
+          console.warn(
+            "initializeMonthDataApi failed for month",
+            targetMonth,
+            err
+          );
         }
-        
+
         const updatedData = await getMemberDataApi(targetMonth);
         setMemberData(updatedData);
         setFilteredMemberData(updatedData);
@@ -493,189 +502,189 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
   };
 
   const handleAddData = async () => {
-  if (!formData.subUserId || !selectedMonth) {
-    showErrorToast("Please select a member and month");
-    return;
-  }
+    if (!formData.subUserId || !selectedMonth) {
+      showErrorToast("Please select a member and month");
+      return;
+    }
 
-  try {
-    setUpdatingMemberId(formData.subUserId);
+    try {
+      setUpdatingMemberId(formData.subUserId);
 
-    const regularInstallment = mandalMonthlyInstallment > 0 
-      ? mandalMonthlyInstallment 
-      : 0; 
+      const userTypedInstallment = parseInt(formData.installment) || 0;
+      const pendingFromForm = parseInt(formData.pendingInstallment) || 0;
 
-    const userTypedTotal = parseInt(formData.installment) || 0;
-    const pendingFromForm = parseInt(formData.pendingInstallment) || 0;
+      const regularInstallment =
+        mandalMonthlyInstallment > 0 ? mandalMonthlyInstallment : 0;
 
-    const isFullyPaid = userTypedTotal >= (regularInstallment + pendingFromForm);
+      const isFullyPaid =
+        userTypedInstallment >= regularInstallment + pendingFromForm;
 
-    const payload = {
-      subUserId: formData.subUserId,
-      month: selectedMonth,
-      installment: regularInstallment,          
-      amount: parseInt(formData.amount) || 0,
-      interest: parseInt(formData.interest) || 0,
-      fine: parseInt(formData.fine) || 0,
-      withdrawal: parseInt(formData.withdrawal) || 0,
-      newWithdrawal: parseInt(formData.newWithdrawal) || 0,
-      outerCheckbox: isFullyPaid,                
-      innerCheckbox: isInstallmentPaid,
-      pendingInstallment: pendingFromForm,       
-    };
+      const payload = {
+        subUserId: formData.subUserId,
+        month: selectedMonth,
+        installment: userTypedInstallment,
+        amount: parseInt(formData.amount) || 0,
+        interest: parseInt(formData.interest) || 0,
+        fine: parseInt(formData.fine) || 0,
+        withdrawal: parseInt(formData.withdrawal) || 0,
+        newWithdrawal: parseInt(formData.newWithdrawal) || 0,
+        outerCheckbox: isFullyPaid,
+        innerCheckbox: isInstallmentPaid,
+        pendingInstallment: pendingFromForm,
+      };
 
-    await createMemberDataApi(payload);
+      await createMemberDataApi(payload);
 
-    showSuccessToast("Member data updated successfully!");
-    
-    const updatedData = await getMemberDataApi(selectedMonth);
-    setMemberData(updatedData);
-    setFilteredMemberData(updatedData);
+      showSuccessToast("Member data updated successfully!");
 
-    setFormData({
-      subUserId: "",
-      installment: "",
-      amount: "",
-      interest: "",
-      fine: "",
-      withdrawal: "",
-      newWithdrawal: "",
-      outerCheckbox: false,
-      innerCheckbox: false,
-      pendingInstallment: ""
-    });
-    setIsInstallmentPaid(true);
-    setSelectedMemberName("");
-    setIsAddDialogOpen(false);
+      const updatedData = await getMemberDataApi(selectedMonth);
+      setMemberData(updatedData);
+      setFilteredMemberData(updatedData);
 
-  } catch (error) {
-  } finally {
-    setUpdatingMemberId(null);
-  }
+      setFormData({
+        subUserId: "",
+        installment: "",
+        amount: "",
+        interest: "",
+        fine: "",
+        withdrawal: "",
+        newWithdrawal: "",
+        outerCheckbox: false,
+        innerCheckbox: false,
+        pendingInstallment: "",
+      });
+      setIsInstallmentPaid(true);
+      setSelectedMemberName("");
+      setIsAddDialogOpen(false);
+    } catch (error) {
+      console.error("Error updating member data:", error);
+      showErrorToast("Failed to update member data");
+    } finally {
+      setUpdatingMemberId(null);
+    }
   };
 
- const handleHaptoSet = async () => {
-  if (!haptoValue) {
-    showErrorToast("Please enter a value for Hapto");
-    return;
-  }
-  const numValue = parseInt(haptoValue);
-  if (isNaN(numValue) || numValue < 0) {
-    showErrorToast("Please enter a valid positive number");
-    return;
-  }
-  if (!mandalId) {
-    showErrorToast("Mandal not found");
-    return;
-  }
-  if (!selectedMonth) {
-    showErrorToast("Please select a month first");
-    return;
-  }
-  try {
-    setIsMonthLoading(true);
-   
-    // Check if this is first time set or update
-    // const isUpdate = isHaptoSet && mandalMonthlyInstallment > 0;
-   
-    // API call with isUpdate flag
-    const result = await updateMandalInstallmentApi(
-      numValue,
-      selectedMonth,
-      true
-      
-    );
-    // Update state
-    setMandalMonthlyInstallment(numValue);
-    setIsHaptoSet(true);
-    setHaptoLabelValue(`Hapto: ₹${numValue}`);
-    // Show appropriate success message
-   
-    // Refresh member data for current month
-    const updatedData = await getMemberDataApi(selectedMonth);
-    setMemberData(updatedData);
-    setFilteredMemberData(updatedData);
-    setIsHaptoDialogOpen(false);
-    setHaptoValue("");
-  } catch (error) {
-    console.error("Error setting hapto value:", error);
-    showErrorToast("Failed to set hapto value");
-  } finally {
-    setIsMonthLoading(false);
-  }
+  const handleHaptoSet = async () => {
+    if (!haptoValue) {
+      showErrorToast("Please enter a value for Hapto");
+      return;
+    }
+    const numValue = parseInt(haptoValue);
+    if (isNaN(numValue) || numValue < 0) {
+      showErrorToast("Please enter a valid positive number");
+      return;
+    }
+    if (!mandalId) {
+      showErrorToast("Mandal not found");
+      return;
+    }
+    if (!selectedMonth) {
+      showErrorToast("Please select a month first");
+      return;
+    }
+    try {
+      setIsMonthLoading(true);
+
+      // Check if this is first time set or update
+      // const isUpdate = isHaptoSet && mandalMonthlyInstallment > 0;
+
+      // API call with isUpdate flag
+      const result = await updateMandalInstallmentApi(
+        numValue,
+        selectedMonth,
+        true
+      );
+      // Update state
+      setMandalMonthlyInstallment(numValue);
+      setIsHaptoSet(true);
+      setHaptoLabelValue(`Hapto: ₹${numValue}`);
+      // Show appropriate success message
+
+      // Refresh member data for current month
+      const updatedData = await getMemberDataApi(selectedMonth);
+      setMemberData(updatedData);
+      setFilteredMemberData(updatedData);
+      setIsHaptoDialogOpen(false);
+      setHaptoValue("");
+    } catch (error) {
+      console.error("Error setting hapto value:", error);
+      showErrorToast("Failed to set hapto value");
+    } finally {
+      setIsMonthLoading(false);
+    }
   };
 
   const handleAddNewMonth = async () => {
-  let newMonth: string;
-  if (months.length === 0 && establishedDate) {
-    const [year, month] = establishedDate.slice(0, 7).split("-").map(Number);
-    newMonth = `${year}-${month.toString().padStart(2, "0")}`;
-  } else if (months.length > 0) {
-    const latestMonth = months[0];
-    const [year, month] = latestMonth.split("-").map(Number);
-    let nextMonth = month + 1;
-    let nextYear = year;
-    if (nextMonth > 12) {
-      nextMonth = 1;
-      nextYear = year + 1;
+    let newMonth: string;
+    if (months.length === 0 && establishedDate) {
+      const [year, month] = establishedDate.slice(0, 7).split("-").map(Number);
+      newMonth = `${year}-${month.toString().padStart(2, "0")}`;
+    } else if (months.length > 0) {
+      const latestMonth = months[0];
+      const [year, month] = latestMonth.split("-").map(Number);
+      let nextMonth = month + 1;
+      let nextYear = year;
+      if (nextMonth > 12) {
+        nextMonth = 1;
+        nextYear = year + 1;
+      }
+      newMonth = `${nextYear}-${nextMonth.toString().padStart(2, "0")}`;
+    } else {
+      newMonth = getCurrentMonth();
     }
-    newMonth = `${nextYear}-${nextMonth.toString().padStart(2, "0")}`;
-  } else {
-    newMonth = getCurrentMonth();
-  }
-  // Set the new month name in state
-  setNewMonthName(newMonth);
-  // Open the confirmation dialog
-  setIsAddMonthDialogOpen(true);
+    // Set the new month name in state
+    setNewMonthName(newMonth);
+    // Open the confirmation dialog
+    setIsAddMonthDialogOpen(true);
   };
 
   const confirmAddNewMonth = async () => {
-  if (!newMonthName || !/^\d{4}-\d{2}$/.test(newMonthName)) {
-    showErrorToast("Invalid month format. Expected YYYY-MM");
-    return;
-  }
-  try {
-    setIsAddingMonth(true);
-    setIsTableLoading(true);
-    await initializeMonthDataApi(newMonthName);
-    const allMonths = await getAllMonthsApi();
-    const validMonths = Array.isArray(allMonths) ? allMonths : [];
-    validMonths.sort((a, b) => {
-      const dateA = new Date(a + "-01");
-      const dateB = new Date(b + "-01");
-      return dateB.getTime() - dateA.getTime();
-    });
-    setMonths(validMonths);
-    setSelectedMonth(newMonthName);
-    const data = await getMemberDataApi(newMonthName);
-    setMemberData(data);
-    setFilteredMemberData(data);   
-    showSuccessToast(
-      `મહિનો ${newMonthName} બનાવાયો! (Installment for this month will use backend's setInstallment)`
-    );
-    setIsAddMonthDialogOpen(false);
-  } catch (error: unknown) {
-    const err = error as {
-      response?: { data?: { message?: string } };
-    };
-    const message = err.response?.data?.message;
-    console.error("Error creating new month:", error);
-    if (message?.includes("Month is required")) {
-      showErrorToast("ત્રુટિ: મહિનો YYYY-MM ફોર્મેટમાં જરૂરી છે");
-    } else if (message) {
-      showErrorToast(`ત્રુટિ: ${message}`);
-    } else {
-      showErrorToast("નવો મહિનો બનાવામાં ત્રુટિ");
+    if (!newMonthName || !/^\d{4}-\d{2}$/.test(newMonthName)) {
+      showErrorToast("Invalid month format. Expected YYYY-MM");
+      return;
     }
-  } finally {
-    setIsAddingMonth(false);
-    setIsTableLoading(false);
-  }
+    try {
+      setIsAddingMonth(true);
+      setIsTableLoading(true);
+      await initializeMonthDataApi(newMonthName);
+      const allMonths = await getAllMonthsApi();
+      const validMonths = Array.isArray(allMonths) ? allMonths : [];
+      validMonths.sort((a, b) => {
+        const dateA = new Date(a + "-01");
+        const dateB = new Date(b + "-01");
+        return dateB.getTime() - dateA.getTime();
+      });
+      setMonths(validMonths);
+      setSelectedMonth(newMonthName);
+      const data = await getMemberDataApi(newMonthName);
+      setMemberData(data);
+      setFilteredMemberData(data);
+      showSuccessToast(
+        `મહિનો ${newMonthName} બનાવાયો! (Installment for this month will use backend's setInstallment)`
+      );
+      setIsAddMonthDialogOpen(false);
+    } catch (error: unknown) {
+      const err = error as {
+        response?: { data?: { message?: string } };
+      };
+      const message = err.response?.data?.message;
+      console.error("Error creating new month:", error);
+      if (message?.includes("Month is required")) {
+        showErrorToast("ત્રુટિ: મહિનો YYYY-MM ફોર્મેટમાં જરૂરી છે");
+      } else if (message) {
+        showErrorToast(`ત્રુટિ: ${message}`);
+      } else {
+        showErrorToast("નવો મહિનો બનાવામાં ત્રુટિ");
+      }
+    } finally {
+      setIsAddingMonth(false);
+      setIsTableLoading(false);
+    }
   };
 
   const cancelAddNewMonth = () => {
-  setIsAddMonthDialogOpen(false);
-  setNewMonthName("");
+    setIsAddMonthDialogOpen(false);
+    setNewMonthName("");
   };
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -713,28 +722,30 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
     touched[field] && !!errors[field];
 
   const handleRowAction = (row: MemberData) => {
-  const regularInstallment = row.installment === 0 && mandalMonthlyInstallment > 0
-    ? mandalMonthlyInstallment
-    : row.installment;
+    const regularInstallment =
+      row.installment === 0 && mandalMonthlyInstallment > 0
+        ? mandalMonthlyInstallment
+        : row.installment;
 
-  const totalInstallmentToShow = regularInstallment + (row.pendingInstallment || 0);
+    const totalInstallmentToShow =
+      regularInstallment + (row.pendingInstallment || 0);
 
-  setFormData({
-    subUserId: row.subUser._id,
-    installment: totalInstallmentToShow.toString(),  
-    amount: row.amount?.toString() ?? "0",
-    interest: row.interest?.toString() ?? "0",
-    fine: row.fine?.toString() ?? "0",
-    withdrawal: row.withdrawal?.toString() ?? "0",
-    newWithdrawal: row.newWithdrawal?.toString() ?? "0",
-    outerCheckbox: row.outerCheckbox ?? false,
-    innerCheckbox: row.innerCheckbox ?? false,
-    pendingInstallment: row.pendingInstallment?.toString() ?? "0",
-  });
+    setFormData({
+      subUserId: row.subUser._id,
+      installment: totalInstallmentToShow.toString(),
+      amount: row.amount?.toString() ?? "0",
+      interest: row.interest?.toString() ?? "0",
+      fine: row.fine?.toString() ?? "0",
+      withdrawal: row.withdrawal?.toString() ?? "0",
+      newWithdrawal: row.newWithdrawal?.toString() ?? "0",
+      outerCheckbox: row.outerCheckbox ?? false,
+      innerCheckbox: row.innerCheckbox ?? false,
+      pendingInstallment: row.pendingInstallment?.toString() ?? "0",
+    });
 
-  setIsInstallmentPaid(row.innerCheckbox ?? false);
-  setSelectedMemberName(row.subUser?.subUserName || "");
-  setIsAddDialogOpen(true);
+    setIsInstallmentPaid(row.innerCheckbox ?? false);
+    setSelectedMemberName(row.subUser?.subUserName || "");
+    setIsAddDialogOpen(true);
   };
 
   const handleInputFocus = (field: keyof Omit<FormData, "subUserId">) => {
@@ -757,7 +768,7 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
       });
     }
   };
- 
+
   if (isDashboardLoading && !hasDataLoaded) {
     return (
       <div className="p-4 md:p-6 space-y-6">
@@ -773,14 +784,16 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
             ))}
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <SkeletonCard key={i} />
-          ))}
-        </div>
+
         <div className="space-y-4">
           <div className="h-10 w-40 md:w-48 bg-gray-200 rounded animate-pulse" />
           <SkeletonTable rows={5} cols={11} />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 md:gap-6">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
         </div>
       </div>
     );
@@ -788,312 +801,313 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
   return (
     <>
       <div className="sticky top-0 z-40 bg-white">
-
-      <PageHeader
-        title="Monthly Ledger"
-        description="View your monthly ledger, withdrawals, and interest earnings in one place."
-      >
-        <div
-          className="
+        <PageHeader
+          title="Monthly Ledger"
+          description="View your monthly ledger, withdrawals, and interest earnings in one place."
+        >
+          <div
+            className="
  hidden
     md:flex md:flex-row md:flex-wrap md:items-center md:gap-3
     lg:flex lg:flex-row lg:flex-wrap lg:items-center lg:gap-3
     w-full
   "
-        >
-          <div>
-            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-              <SelectTrigger className="w-full sm:w-[180px] shrink-0">
-                <Calendar className="h-4 w-4 mr-2" />
-                {isAddingMonth ? (
-                  <span className="text-gray-400 text-sm">
-                    Loading months...
-                  </span>
-                ) : (
-                  <SelectValue placeholder="Select month" />
-                )}
-              </SelectTrigger>
-              {!isAddingMonth && (
-                <SelectContent>
-                  {Array.isArray(months) && months.length > 0 ? (
-                    months.map((month) => (
-                      <SelectItem key={month} value={month}>
-                        {new Date(month + "-01").toLocaleString("default", {
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="none" disabled>
-                      No months available
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              )}
-            </Select>
-          </div>
-          <div className="">
-        <Button
-    variant="default"
-    onClick={handleAddNewMonth}
-    className="w-full sm:w-auto lg:w-auto shrink-0"
-    disabled={isAddingMonth || subUsers.length === 0}
-   
-  >
-    {isAddingMonth ? (
-      <Loader
-        size="sm"
-        variant="white"
-        type="dots"
-        className="!gap-0"
-        show
-      />
-    ) : (
-      <Plus className="h-4 w-4" />
-    )}
-    <span className="ml-2">
-      {isAddingMonth ? "Adding..." : "Add New Month"}
-    </span>
-         </Button>
-          </div>
-          <div className="">
-            <div className="sm:ml-auto">
-              <Dialog
-                open={isAddMemberDialogOpen}
-                onOpenChange={handleDialogClose}
-               
-              >
-                <DialogTrigger asChild>
-                  <Button
-                    variant="default"
-                    className="w-full sm:w-auto lg:w-auto shrink-0"
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span className="ml-2">Add Member</span>
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-[95vw] sm:max-w-md p-4 sm:p-6" onPointerDownOutside={(e) => e.preventDefault()}
-    onInteractOutside={(e) => e.preventDefault()}
-    onEscapeKeyDown={(e) => e.preventDefault()} >
-                  <DialogHeader>
-                    <DialogTitle className="text-lg sm:text-xl">
-                      Add New Member
-                    </DialogTitle>
-                  </DialogHeader>
-                  <div className="grid grid-cols-1 gap-4 py-4">
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="subUserName"
-                        className="text-sm sm:text-base"
-                      >
-                        Member Name
-                      </Label>
-                      <Input
-                        id="subUserName"
-                        value={newMemberData.subUserName}
-                        onChange={handleNameChange}
-                        placeholder="Enter member name"
-                        className={
-                          hasError("subUserName")
-                            ? "border-red-500 focus:ring-red-500"
-                            : ""
-                        }
-                        disabled={isAddingMember}
-                      />
-                      {hasError("subUserName") && (
-                        <p className="text-red-500 text-xs mt-1">
-                          {errors.subUserName}
-                        </p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="phoneNumber"
-                        className="text-sm sm:text-base"
-                      >
-                        Phone Number
-                      </Label>
-                      <Input
-                        id="phoneNumber"
-                        type="tel"
-                        value={newMemberData.phoneNumber}
-                        onChange={handlePhoneNumberChange}
-                        placeholder="+91 12345 67890"
-                        className={
-                          hasError("phoneNumber")
-                            ? "border-red-500 focus:ring-red-500"
-                            : ""
-                        }
-                        disabled={isAddingMember}
-                      />
-                      {hasError("phoneNumber") && (
-                        <p className="text-red-500 text-xs mt-1">
-                          {errors.phoneNumber}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex flex-col sm:flex-row justify-end gap-2">
-                    <Button
-                      variant="outline"
-                      type="button"
-                      onClick={() => handleDialogClose(false)}
-                      className="w-full sm:w-auto"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={handleAddMember}
-                      disabled={
-                        Object.keys(validateNewMemberForm(newMemberData))
-                          .length > 0 || isAddingMember
-                      }
-                      className="w-full sm:w-auto"
-                    >
-                      {isAddingMember ? (
-                        <div className="flex items-center justify-center gap-2">
-                          <Loader
-                            size="sm"
-                            variant="white"
-                            type="dots"
-                            className="!gap-0"
-                            show
-                          />
-                          Adding...
-                        </div>
-                      ) : (
-                        "Add Member"
-                      )}
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            </div>
-          </div>
-          <div className="">
-            <div className="flex items-center gap-2">
-              <Dialog
-                open={isHaptoDialogOpen}
-                onOpenChange={setIsHaptoDialogOpen}
-                 
-              >
-                <DialogTrigger asChild>
-                  <Button
-                    variant="default"
-                    className="w-full sm:w-auto lg:w-auto shrink-0"
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span className="ml-2">
-                      {isHaptoSet ? "Update Hapto" : "Set Hapto"}
+          >
+            <div>
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger className="w-full sm:w-[180px] shrink-0">
+                  <Calendar className="h-4 w-4 mr-2" />
+                  {isAddingMonth ? (
+                    <span className="text-gray-400 text-sm">
+                      Loading months...
                     </span>
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-[95vw] sm:max-w-md p-4 sm:p-6"
-    onPointerDownOutside={(e) => e.preventDefault()}
-    onInteractOutside={(e) => e.preventDefault()}
-    onEscapeKeyDown={(e) => e.preventDefault()}
-  >
-    <DialogHeader>
-      <DialogTitle className="text-lg sm:text-xl">
-        {isHaptoSet ? "Update Hapto Value" : "Set Hapto Value"}
-      </DialogTitle>
-    </DialogHeader>
-    <div className="grid grid-cols-1 gap-4 py-4">
-      <div className="space-y-2">
-        <Label
-          htmlFor="haptoValue"
-          className="text-sm sm:text-base"
-        >
-          હપ્તો (Installment)
-        </Label>
-        <Input
-          id="haptoValue"
-          type="number"
-          value={haptoValue}
-          onChange={(e) => setHaptoValue(e.target.value)}
-          placeholder={
-            isHaptoSet
-              ? `Update hapto value (Current: ₹${mandalMonthlyInstallment})`
-              : "Enter hapto value (e.g., 1000)"
-          }
-          className="text-base"
-        />
-       
-      </div>
-    </div>
-    <div className="flex flex-col sm:flex-row justify-end gap-2">
-      <Button
-        variant="outline"
-        type="button"
-        onClick={() => {
-          setIsHaptoDialogOpen(false);
-          setHaptoValue("");
-        }}
-        className="w-full sm:w-auto"
-      >
-        Cancel
-      </Button>
-      <Button
-        variant="default"
-        type="button"
-        onClick={handleHaptoSet}
-        className="w-full sm:w-auto"
-        disabled={!haptoValue || isMonthLoading}
-      >
-        {isMonthLoading ? (
-          <div className="flex items-center justify-center gap-2">
-            <Loader
-              size="sm"
-              variant="white"
-              type="dots"
-              className="!gap-0"
-              show
-            />
-            {isHaptoSet ? "Updating..." : "Setting..."}
-          </div>
-        ) : (
-          isHaptoSet ? "Update Hapto" : "Set Hapto"
-        )}
-      </Button>
-    </div>
-  </DialogContent>
-              </Dialog>
+                  ) : (
+                    <SelectValue placeholder="Select month" />
+                  )}
+                </SelectTrigger>
+                {!isAddingMonth && (
+                  <SelectContent>
+                    {Array.isArray(months) && months.length > 0 ? (
+                      months.map((month) => (
+                        <SelectItem key={month} value={month}>
+                          {new Date(month + "-01").toLocaleString("default", {
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="none" disabled>
+                        No months available
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                )}
+              </Select>
+            </div>
+            <div className="">
+              <Button
+                variant="default"
+                onClick={handleAddNewMonth}
+                className="w-full sm:w-auto lg:w-auto shrink-0"
+                disabled={isAddingMonth || subUsers.length === 0}
+              >
+                {isAddingMonth ? (
+                  <Loader
+                    size="sm"
+                    variant="white"
+                    type="dots"
+                    className="!gap-0"
+                    show
+                  />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+                <span className="ml-2">
+                  {isAddingMonth ? "Adding..." : "Add New Month"}
+                </span>
+              </Button>
+            </div>
+            <div className="">
+              <div className="sm:ml-auto">
+                <Dialog
+                  open={isAddMemberDialogOpen}
+                  onOpenChange={handleDialogClose}
+                >
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="default"
+                      className="w-full sm:w-auto lg:w-auto shrink-0"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span className="ml-2">Add Member</span>
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent
+                    className="max-w-[95vw] sm:max-w-md p-4 sm:p-6"
+                    onPointerDownOutside={(e) => e.preventDefault()}
+                    onInteractOutside={(e) => e.preventDefault()}
+                    onEscapeKeyDown={(e) => e.preventDefault()}
+                  >
+                    <DialogHeader>
+                      <DialogTitle className="text-lg sm:text-xl">
+                        Add New Member
+                      </DialogTitle>
+                    </DialogHeader>
+                    <div className="grid grid-cols-1 gap-4 py-4">
+                      <div className="space-y-2">
+                        <Label
+                          htmlFor="subUserName"
+                          className="text-sm sm:text-base"
+                        >
+                          Member Name
+                        </Label>
+                        <Input
+                          id="subUserName"
+                          value={newMemberData.subUserName}
+                          onChange={handleNameChange}
+                          placeholder="Enter member name"
+                          className={
+                            hasError("subUserName")
+                              ? "border-red-500 focus:ring-red-500"
+                              : ""
+                          }
+                          disabled={isAddingMember}
+                        />
+                        {hasError("subUserName") && (
+                          <p className="text-red-500 text-xs mt-1">
+                            {errors.subUserName}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label
+                          htmlFor="phoneNumber"
+                          className="text-sm sm:text-base"
+                        >
+                          Phone Number
+                        </Label>
+                        <Input
+                          id="phoneNumber"
+                          type="tel"
+                          value={newMemberData.phoneNumber}
+                          onChange={handlePhoneNumberChange}
+                          placeholder="+91 12345 67890"
+                          className={
+                            hasError("phoneNumber")
+                              ? "border-red-500 focus:ring-red-500"
+                              : ""
+                          }
+                          disabled={isAddingMember}
+                        />
+                        {hasError("phoneNumber") && (
+                          <p className="text-red-500 text-xs mt-1">
+                            {errors.phoneNumber}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        type="button"
+                        onClick={() => handleDialogClose(false)}
+                        className="w-full sm:w-auto"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={handleAddMember}
+                        disabled={
+                          Object.keys(validateNewMemberForm(newMemberData))
+                            .length > 0 || isAddingMember
+                        }
+                        className="w-full sm:w-auto"
+                      >
+                        {isAddingMember ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <Loader
+                              size="sm"
+                              variant="white"
+                              type="dots"
+                              className="!gap-0"
+                              show
+                            />
+                            Adding...
+                          </div>
+                        ) : (
+                          "Add Member"
+                        )}
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </div>
+            <div className="">
+              <div className="flex items-center gap-2">
+                <Dialog
+                  open={isHaptoDialogOpen}
+                  onOpenChange={setIsHaptoDialogOpen}
+                >
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="default"
+                      className="w-full sm:w-auto lg:w-auto shrink-0"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span className="ml-2">
+                        {isHaptoSet ? "Update Hapto" : "Set Hapto"}
+                      </span>
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent
+                    className="max-w-[95vw] sm:max-w-md p-4 sm:p-6"
+                    onPointerDownOutside={(e) => e.preventDefault()}
+                    onInteractOutside={(e) => e.preventDefault()}
+                    onEscapeKeyDown={(e) => e.preventDefault()}
+                  >
+                    <DialogHeader>
+                      <DialogTitle className="text-lg sm:text-xl">
+                        {isHaptoSet ? "Update Hapto Value" : "Set Hapto Value"}
+                      </DialogTitle>
+                    </DialogHeader>
+                    <div className="grid grid-cols-1 gap-4 py-4">
+                      <div className="space-y-2">
+                        <Label
+                          htmlFor="haptoValue"
+                          className="text-sm sm:text-base"
+                        >
+                          હપ્તો (Installment)
+                        </Label>
+                        <Input
+                          id="haptoValue"
+                          type="number"
+                          value={haptoValue}
+                          onChange={(e) => setHaptoValue(e.target.value)}
+                          placeholder={
+                            isHaptoSet
+                              ? `Update hapto value (Current: ₹${mandalMonthlyInstallment})`
+                              : "Enter hapto value (e.g., 1000)"
+                          }
+                          className="text-base"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        type="button"
+                        onClick={() => {
+                          setIsHaptoDialogOpen(false);
+                          setHaptoValue("");
+                        }}
+                        className="w-full sm:w-auto"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="default"
+                        type="button"
+                        onClick={handleHaptoSet}
+                        className="w-full sm:w-auto"
+                        disabled={!haptoValue || isMonthLoading}
+                      >
+                        {isMonthLoading ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <Loader
+                              size="sm"
+                              variant="white"
+                              type="dots"
+                              className="!gap-0"
+                              show
+                            />
+                            {isHaptoSet ? "Updating..." : "Setting..."}
+                          </div>
+                        ) : isHaptoSet ? (
+                          "Update Hapto"
+                        ) : (
+                          "Set Hapto"
+                        )}
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
             </div>
           </div>
-        </div>
-      </PageHeader>
+        </PageHeader>
 
- {/* MOBILE: Sticky Search + Current Month */}
-      <div className="md:hidden sticky top-0 z-30 bg-white px-4 py-2 flex items-center justify-between gap-3">
-  {/* Search Bar */}
-  <div className="relative flex-1">
-    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
-    <Input
-      type="search"
-      placeholder="Search members..."
-      value={searchQuery}
-      onChange={(e) => setSearchQuery(e.target.value)}
-      className="pl-10 w-full"
-    />
-  </div>
-  {/* Current Month Label - With Loading */}
-  {isMonthLoading ? (
-    <div className="px-3 py-2 bg-gray-100 rounded-md border text-xs font-medium text-gray-600 whitespace-nowrap animate-pulse">
-      <div className="h- w-16 bg-gray-300 rounded"></div>
-    </div>
-  ) : (
-    <div className="px-3 py-2 bg-yellow-50 rounded-md border text-xs font-medium text-gray-600 whitespace-nowrap">
-      {selectedMonth
-        ? new Date(selectedMonth + "-01").toLocaleString("default", {
-            month: "short",
-            year: "numeric",
-          })
-        : "—"}
-    </div>
-  )}
-      </div>
+        {/* MOBILE: Sticky Search + Current Month */}
+        <div className="md:hidden sticky top-0 z-30 bg-white px-4 py-2 flex items-center justify-between gap-3">
+          {/* Search Bar */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              type="search"
+              placeholder="Search members..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 w-full"
+            />
+          </div>
+          {/* Current Month Label - With Loading */}
+          {isMonthLoading ? (
+            <div className="px-3 py-2 bg-gray-100 rounded-md border text-xs font-medium text-gray-600 whitespace-nowrap animate-pulse">
+              <div className="h- w-16 bg-gray-300 rounded"></div>
+            </div>
+          ) : (
+            <div className="px-3 py-2 bg-yellow-50 rounded-md border text-xs font-medium text-gray-600 whitespace-nowrap">
+              {selectedMonth
+                ? new Date(selectedMonth + "-01").toLocaleString("default", {
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "—"}
+            </div>
+          )}
+        </div>
       </div>
 
       <div>
@@ -1105,9 +1119,9 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
     p-4 sm:p-6
     max-h-[90vh] /* limit height on small devices */
     overflow-y-auto "
-    onPointerDownOutside={(e) => e.preventDefault()}
-    onInteractOutside={(e) => e.preventDefault()}
-    onEscapeKeyDown={(e) => e.preventDefault()}
+            onPointerDownOutside={(e) => e.preventDefault()}
+            onInteractOutside={(e) => e.preventDefault()}
+            onEscapeKeyDown={(e) => e.preventDefault()}
           >
             <DialogHeader>
               <DialogTitle className="text-lg sm:text-xl">
@@ -1128,21 +1142,7 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
                 />
                 <input type="hidden" value={formData.subUserId} />
               </div>
-              <div className="space-y-2 sm:col-span-2 flex items-center gap-3">
-  <Checkbox
-    id="installmentPaid"
-    checked={isInstallmentPaid}
-    onCheckedChange={(checked) => setIsInstallmentPaid(checked as boolean)}
-  />
-  <Label htmlFor="installmentPaid" className="text-sm sm:text-base font-medium">
-    હપ્તો ચૂકવાયો (વર્તમાન + બાકી હપ્તો બંને)
-    {formData.pendingInstallment && parseInt(formData.pendingInstallment) > 0 && (
-      <span className="text-red-600 text-xs ml-2">
-        (બાકી: ₹{formData.pendingInstallment})
-      </span>
-    )}
-  </Label>
-</div>
+
               <div className="space-y-2">
                 <Label htmlFor="installment" className="text-sm sm:text-base">
                   હપ્તો (Installment)
@@ -1257,7 +1257,40 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
                   disabled={updatingMemberId !== null}
                 />
               </div>
+              <div className="space-y-2 sm:col-span-2 flex items-center gap-3 ">
+                <Checkbox
+                  id="installmentPaid"
+                  checked={isInstallmentPaid}
+                  onCheckedChange={(checked) =>
+                    setIsInstallmentPaid(checked as boolean)
+                  }
+                 className={`
+      border-2
+      ${
+        isInstallmentPaid
+          ? "border-green-600 data-[state=checked]:bg-green-600"
+          : formData.pendingInstallment &&
+            parseInt(formData.pendingInstallment) > 0
+          ? "border-red-600"
+          : "border-gray-400"
+      }
+    `}
+                />
+                <Label
+                  htmlFor="installmentPaid"
+                  className="text-sm sm:text-base font-medium"
+                >
+                  હપ્તો ચૂકવાયો (વર્તમાન + બાકી હપ્તો બંને)
+                  {formData.pendingInstallment &&
+                    parseInt(formData.pendingInstallment) > 0 && (
+                      <span className="text-red-600 text-xs ml-2">
+                        (બાકી: ₹{formData.pendingInstallment})
+                      </span>
+                    )}
+                </Label>
+              </div>
             </div>
+
             <div className="flex flex-col sm:flex-row justify-end gap-2">
               <Button
                 variant="outline"
@@ -1271,9 +1304,9 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
                     fine: "",
                     withdrawal: "",
                     newWithdrawal: "",
-                    outerCheckbox : false,
-                    innerCheckbox : false,
-                    pendingInstallment: ""
+                    outerCheckbox: false,
+                    innerCheckbox: false,
+                    pendingInstallment: "",
                   });
                   setIsInstallmentPaid(true);
                   setSelectedMemberName("");
@@ -1284,6 +1317,7 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
               >
                 Cancel
               </Button>
+
               <Button
                 type="button"
                 onClick={handleAddData}
@@ -1310,79 +1344,83 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
         </Dialog>
       </div>
 
-      <Dialog open={isAddMonthDialogOpen} onOpenChange={setIsAddMonthDialogOpen} >
-   <DialogContent
-    className="max-w-[95vw] sm:max-w-md p-4 sm:p-6"
-    onPointerDownOutside={(e) => e.preventDefault()}
-    onInteractOutside={(e) => e.preventDefault()}
-    onEscapeKeyDown={(e) => e.preventDefault()}
-  >
-    <DialogHeader>
-      <DialogTitle className="text-lg sm:text-xl">
-        Confirm New Month
-      </DialogTitle>
-    </DialogHeader>
-   
-   <div className="py-4">
-  <div className="p-4 rounded-lg bg-white border border-gray-200 shadow-md">
-    <div className="flex items-center justify-between">
-      {/* Current Month */}
-      <div className="flex flex-col items-start">
-        <p className="text-xs text-gray-500">Current</p>
-        <p className="text-lg font-semibold text-blue-700">
-          {selectedMonth || "No month selected"}
-        </p>
-      </div>
-      {/* Arrow */}
-      <div className="flex items-center justify-center">
-        <div className="h-0.5 w-10 bg-gray-300"></div>
-        <span className="mx-2 text-2xl font-bold text-gray-500">→</span>
-        <div className="h-0.5 w-10 bg-gray-300"></div>
-      </div>
-      {/* New Month */}
-      <div className="flex flex-col items-end">
-        <p className="text-xs text-gray-500">New Month</p>
-        <p className="text-lg font-semibold text-green-700">
-          {newMonthName || "--"}
-        </p>
-      </div>
-    </div>
-  </div>
-</div>
-   
-   
-    <div className="flex flex-col sm:flex-row justify-end gap-2">
-      <Button
-        variant="outline"
-        type="button"
-        onClick={cancelAddNewMonth}
-        className="w-full sm:w-auto"
+      <Dialog
+        open={isAddMonthDialogOpen}
+        onOpenChange={setIsAddMonthDialogOpen}
       >
-        Cancel (રદ કરો)
-      </Button>
-      <Button
-        type="button"
-        onClick={confirmAddNewMonth}
-        className="w-full sm:w-auto bg-green-600 hover:bg-green-700"
-        disabled={isAddingMonth}
-      >
-        {isAddingMonth ? (
-          <div className="flex items-center justify-center gap-2">
-            <Loader
-              size="sm"
-              variant="white"
-              type="dots"
-              className="!gap-0"
-              show
-            />
-            Creating...
+        <DialogContent
+          className="max-w-[95vw] sm:max-w-md p-4 sm:p-6"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle className="text-lg sm:text-xl">
+              Confirm New Month
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="py-4">
+            <div className="p-4 rounded-lg bg-white border border-gray-200 shadow-md">
+              <div className="flex items-center justify-between">
+                {/* Current Month */}
+                <div className="flex flex-col items-start">
+                  <p className="text-xs text-gray-500">Current</p>
+                  <p className="text-lg font-semibold text-blue-700">
+                    {selectedMonth || "No month selected"}
+                  </p>
+                </div>
+                {/* Arrow */}
+                <div className="flex items-center justify-center">
+                  <div className="h-0.5 w-10 bg-gray-300"></div>
+                  <span className="mx-2 text-2xl font-bold text-gray-500">
+                    →
+                  </span>
+                  <div className="h-0.5 w-10 bg-gray-300"></div>
+                </div>
+                {/* New Month */}
+                <div className="flex flex-col items-end">
+                  <p className="text-xs text-gray-500">New Month</p>
+                  <p className="text-lg font-semibold text-green-700">
+                    {newMonthName || "--"}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
-        ) : (
-          "Confirm (ખાતરી કરો)"
-        )}
-      </Button>
-    </div>
-  </DialogContent>
+
+          <div className="flex flex-col sm:flex-row justify-end gap-2">
+            <Button
+              variant="outline"
+              type="button"
+              onClick={cancelAddNewMonth}
+              className="w-full sm:w-auto"
+            >
+              Cancel (રદ કરો)
+            </Button>
+            <Button
+              type="button"
+              onClick={confirmAddNewMonth}
+              className="w-full sm:w-auto bg-green-600 hover:bg-green-700"
+              disabled={isAddingMonth}
+            >
+              {isAddingMonth ? (
+                <div className="flex items-center justify-center gap-2">
+                  <Loader
+                    size="sm"
+                    variant="white"
+                    type="dots"
+                    className="!gap-0"
+                    show
+                  />
+                  Creating...
+                </div>
+              ) : (
+                "Confirm (ખાતરી કરો)"
+              )}
+            </Button>
+          </div>
+        </DialogContent>
       </Dialog>
 
       <Card className="hidden md:block lg:block">
@@ -1441,11 +1479,10 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
         <CardContent>
           <div className="overflow-x-auto w-full">
             <div className="max-h-[420px] overflow-y-auto">
-<Table className="min-w-[1000px] w-full">
+              <Table className="min-w-[1000px] w-full">
                 <TableHeader className="sticky top-0 z-20 bg-white">
                   <TableRow className="bg-muted/50">
-                   <TableHead className="sticky top-0 bg-white z-30 text-center">
-                    </TableHead>
+                    <TableHead className="sticky top-0 bg-white z-30 text-center"></TableHead>
                     <TableHead className="sticky top-0 bg-white z-30 text-center">
                       ક્રમ નં.
                     </TableHead>
@@ -1534,9 +1571,9 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
                     filteredMemberData.map((row, index) => {
                       const carriedForwardAmount =
                         calculateCarriedForwardAmount(row?.subUser?._id);
-                     
-                     const isChecked = row.outerCheckbox;
-                     
+
+                      const isChecked = row.outerCheckbox;
+
                       const totalInstallmentDisplay =
                         getDisplayInstallmentValue(row);
                       return (
@@ -1544,7 +1581,7 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
                           <TableCell className="text-center">
                             <Checkbox
                               checked={isChecked}
-                             onCheckedChange={() => handleRowAction(row)}
+                              onCheckedChange={() => handleRowAction(row)}
                               className="border border-gray-600 h-5 w-5 rounded-sm
                                 data-[state=checked]:bg-green-600
                                 data-[state=checked]:border-green-600"
@@ -1560,30 +1597,34 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
                           </TableCell>
                           <TableCell className="text-center text-xs md:text-sm">
                             <div className="flex flex-col items-center">
-                              <div className="flex items-center justify-center gap-2">
-                               {(() => {
-  const installmentInfo = getDisplayInstallmentValue(row);
-  return (
-    <div className="flex flex-col items-center">
-      <span
-        className={`font-medium ${
-          isChecked ? "text-green-600" : "text-gray-500"
-        }`}
-      >
-        ₹{installmentInfo.value.toLocaleString()}
-      </span>
-      {installmentInfo.hasPending && (
-        <span className="text-[10px] text-red-600 mt-0.5 font-medium">
-          (empty installment : {installmentInfo.pendingAmount})
-        </span>
-      )}
-    </div>
-  );
-})()}
-                              </div>
-                            
+                              {(() => {
+                                const installmentInfo =
+                                  getDisplayInstallmentValue(row);
+
+                                return (
+                                  <div className="flex flex-col items-center">
+                                    <span
+                                      className={`font-medium ${
+                                        row.outerCheckbox
+                                          ? "text-green-600"
+                                          : "text-gray-500"
+                                      }`}
+                                    >
+                                      ₹{installmentInfo.value.toLocaleString()}
+                                    </span>
+
+                                    {installmentInfo.hasPending && (
+                                      <span className="text-[10px] text-red-600 mt-0.5 font-medium">
+                                        (empty installment :{" "}
+                                        {installmentInfo.pendingAmount})
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </TableCell>
+
                           <TableCell className="text-center text-xs md:text-sm font-semibold">
                             {carriedForwardAmount > 0 ? (
                               <div className="flex flex-col items-center">
@@ -1660,350 +1701,359 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
         </CardContent>
       </Card>
 
-    
-
-    {/* MOBILE 2-COLUMN CARD GRID */}
+      {/* MOBILE 2-COLUMN CARD GRID */}
       <div
-  className="md:block lg:block overflow-y-auto px-4"
-  style={{ maxHeight: "calc(100vh - 140px)", paddingBottom: "80px" }}
->
-  <div className="md:hidden grid grid-cols-2 gap-2 mt-3">
-    {isMonthLoading || isTableDataLoading ? (
-      Array.from({ length: 6 }).map((_, index) => (
-        <div
-          key={`mobile-skeleton-${index}`}
-          className="bg-gray-100 border border-gray-200 rounded-md p-2 flex flex-col gap-2 animate-pulse"
-        >
-          <div className="flex items-center justify-between">
-            <div className="h-4 w-4 bg-gray-300 rounded"></div>
-            <div className="h-4 w-24 bg-gray-300 rounded ml-2 flex-1"></div>
-            <div className="h-4 w-6 bg-gray-300 rounded ml-1"></div>
-          </div>
-         
-          <div className="flex justify-between">
-            <div className="h-3 w-12 bg-gray-300 rounded"></div>
-            <div className="h-3 w-16 bg-gray-300 rounded"></div>
-          </div>
-         
-          <div className="flex justify-between">
-            <div className="h-3 w-12 bg-gray-300 rounded"></div>
-            <div className="h-3 w-16 bg-gray-300 rounded"></div>
-          </div>
-         
-          <div className="flex justify-between">
-            <div className="h-3 w-8 bg-gray-300 rounded"></div>
-            <div className="h-3 w-12 bg-gray-300 rounded"></div>
-          </div>
-         
-          <div className="flex justify-between">
-            <div className="h-3 w-8 bg-gray-300 rounded"></div>
-            <div className="h-3 w-12 bg-gray-300 rounded"></div>
-          </div>
-         
-          <div className="flex justify-between">
-            <div className="h-3 w-16 bg-gray-300 rounded"></div>
-            <div className="h-3 w-12 bg-gray-300 rounded"></div>
-          </div>
-         
-          <div className="flex justify-between">
-            <div className="h-3 w-16 bg-gray-300 rounded"></div>
-            <div className="h-3 w-12 bg-gray-300 rounded"></div>
-          </div>
-         
-          <div className="flex justify-between">
-            <div className="h-3 w-20 bg-gray-300 rounded"></div>
-            <div className="h-3 w-16 bg-gray-300 rounded"></div>
-          </div>
-         
-          <div className="mt-2 w-full h-8 bg-gray-300 rounded"></div>
-        </div>
-      ))
-    ) : filteredMemberData.length === 0 ? (
-      <div className="col-span-2 flex flex-col items-center justify-center text-gray-500 py-8">
-        <HiOutlineUserGroup className="h-12 w-12 mb-4 opacity-50" />
-        <p className="text-base font-medium mb-2">
-          {searchQuery ? "No members found" : "No members added yet"}
-        </p>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setIsAddMemberDialogOpen(true)}
-          className="mt-2"
-        >
-          <Plus className="h-3 w-3 mr-1" />
-          Add First Member
-        </Button>
-      </div>
-    ) : (
-      filteredMemberData.map((row, index) => {
-      
-        const carriedForwardAmount = calculateCarriedForwardAmount(
-          row?.subUser?._id
-        );
-        const isChecked = row.outerCheckbox;
-       
-        const totalInstallmentDisplay = getDisplayInstallmentValue(row);
-        return (
-          <div
-            key={row._id}
-            className="bg-white border border-b-emerald-500 shadow-sm rounded-md p-2 flex flex-col gap-1"
-          >
-            {/* TOP: Checkbox + Name + Index */}
-            <div className="flex items-center justify-between">
-              <Checkbox
-               checked={row.outerCheckbox}
-                onCheckedChange={() => handleRowAction(row)}
-                className="
+        className="md:block lg:block overflow-y-auto px-4"
+        style={{ maxHeight: "calc(100vh - 140px)", paddingBottom: "80px" }}
+      >
+        <div className="md:hidden grid grid-cols-2 gap-2 mt-3">
+          {isMonthLoading || isTableDataLoading ? (
+            Array.from({ length: 6 }).map((_, index) => (
+              <div
+                key={`mobile-skeleton-${index}`}
+                className="bg-gray-100 border border-gray-200 rounded-md p-2 flex flex-col gap-2 animate-pulse"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="h-4 w-4 bg-gray-300 rounded"></div>
+                  <div className="h-4 w-24 bg-gray-300 rounded ml-2 flex-1"></div>
+                  <div className="h-4 w-6 bg-gray-300 rounded ml-1"></div>
+                </div>
+
+                <div className="flex justify-between">
+                  <div className="h-3 w-12 bg-gray-300 rounded"></div>
+                  <div className="h-3 w-16 bg-gray-300 rounded"></div>
+                </div>
+
+                <div className="flex justify-between">
+                  <div className="h-3 w-12 bg-gray-300 rounded"></div>
+                  <div className="h-3 w-16 bg-gray-300 rounded"></div>
+                </div>
+
+                <div className="flex justify-between">
+                  <div className="h-3 w-8 bg-gray-300 rounded"></div>
+                  <div className="h-3 w-12 bg-gray-300 rounded"></div>
+                </div>
+
+                <div className="flex justify-between">
+                  <div className="h-3 w-8 bg-gray-300 rounded"></div>
+                  <div className="h-3 w-12 bg-gray-300 rounded"></div>
+                </div>
+
+                <div className="flex justify-between">
+                  <div className="h-3 w-16 bg-gray-300 rounded"></div>
+                  <div className="h-3 w-12 bg-gray-300 rounded"></div>
+                </div>
+
+                <div className="flex justify-between">
+                  <div className="h-3 w-16 bg-gray-300 rounded"></div>
+                  <div className="h-3 w-12 bg-gray-300 rounded"></div>
+                </div>
+
+                <div className="flex justify-between">
+                  <div className="h-3 w-20 bg-gray-300 rounded"></div>
+                  <div className="h-3 w-16 bg-gray-300 rounded"></div>
+                </div>
+
+                <div className="mt-2 w-full h-8 bg-gray-300 rounded"></div>
+              </div>
+            ))
+          ) : filteredMemberData.length === 0 ? (
+            <div className="col-span-2 flex flex-col items-center justify-center text-gray-500 py-8">
+              <HiOutlineUserGroup className="h-12 w-12 mb-4 opacity-50" />
+              <p className="text-base font-medium mb-2">
+                {searchQuery ? "No members found" : "No members added yet"}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsAddMemberDialogOpen(true)}
+                className="mt-2"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add First Member
+              </Button>
+            </div>
+          ) : (
+            filteredMemberData.map((row, index) => {
+              const carriedForwardAmount = calculateCarriedForwardAmount(
+                row?.subUser?._id
+              );
+              const isChecked = row.outerCheckbox;
+
+              const totalInstallmentDisplay = getDisplayInstallmentValue(row);
+              return (
+                <div
+                  key={row._id}
+                  className="bg-white border border-b-emerald-500 shadow-sm rounded-md p-2 flex flex-col gap-1"
+                >
+                  {/* TOP: Checkbox + Name + Index */}
+                  <div className="flex items-center justify-between">
+                    <Checkbox
+                      checked={row.outerCheckbox}
+                      onCheckedChange={() => handleRowAction(row)}
+                      className="
                   h-4 w-4 border border-gray-600
                   data-[state=checked]:bg-green-600
                   data-[state=checked]:border-green-600
                 "
-              />
-              <p className="font-semibold text-[11px] text-gray-500 truncate flex-1 ml-2">
-                {row?.subUser?.subUserName}
-              </p>
-              <span className="text-[10px] text-green-700 ml-1">
-                #{index + 1}
-              </span>
-            </div>
-            <div className="flex justify-between text-[10px]">
-  <span className="text-gray-600">હપ્તો</span>
-  <div className="flex flex-col items-end">
-    {(() => {
-      const installmentInfo = getDisplayInstallmentValue(row);
-      return (
-        <>
-          <span
-            className={`font-semibold ${
-              row.outerCheckbox ? "text-green-600" : "text-gray-500"
-            }`}
-          >
-            ₹{installmentInfo.value.toLocaleString()}
-          </span>
-          {installmentInfo.hasPending && (
-            <span className="text-[9px] text-red-600 font-medium mt-0.5">
-              (empty installment : {installmentInfo.pendingAmount})
-            </span>
-          )}
-          {row.installment === 0 && mandalMonthlyInstallment > 0 && !installmentInfo.hasPending && (
-            <span className="text-[8px] text-gray-400 mt-0.5">
-              (Default: ₹{mandalMonthlyInstallment})
-            </span>
-          )}
-        </>
-      );
-    })()}
-  </div>
-</div>
-        {/* <div className="text-[10px] text-gray-500 text-right">
+                    />
+                    <p className="font-semibold text-[11px] text-gray-500 truncate flex-1 ml-2">
+                      {row?.subUser?.subUserName}
+                    </p>
+                    <span className="text-[10px] text-green-700 ml-1">
+                      #{index + 1}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-gray-600">હપ્તો</span>
+                    <div className="flex flex-col items-end">
+                      {(() => {
+                        const installmentInfo = getDisplayInstallmentValue(row);
+                        return (
+                          <>
+                            <span
+                              className={`font-semibold ${
+                                row.outerCheckbox
+                                  ? "text-green-600"
+                                  : "text-gray-500"
+                              }`}
+                            >
+                              ₹{installmentInfo.value.toLocaleString()}
+                            </span>
+                            {installmentInfo.hasPending && (
+                              <span className="text-[9px] text-red-600 font-medium mt-0.5">
+                                (empty installment :{" "}
+                                {installmentInfo.pendingAmount})
+                              </span>
+                            )}
+                            {row.installment === 0 &&
+                              mandalMonthlyInstallment > 0 &&
+                              !installmentInfo.hasPending && (
+                                <span className="text-[8px] text-gray-400 mt-0.5">
+                                  (Default: ₹{mandalMonthlyInstallment})
+                                </span>
+                              )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                  {/* <div className="text-[10px] text-gray-500 text-right">
   હપ્તો: ₹{getDisplayInstallmentValue(row)}
 </div> */}
-            {/* Amount */}
-            <div className="flex justify-between text-[10px]">
-              <span className="text-gray-600">આ.નો ઉ.</span>
-              <span className="font-semibold text-green-700">
-                {carriedForwardAmount > 0
-                  ? `₹${carriedForwardAmount}`
-                  : row.amount > 0
-                  ? `₹${row.amount}`
-                  : "-"}
-              </span>
-            </div>
-            {/* Interest */}
-            <div className="flex justify-between text-[10px]">
-              <span className="text-gray-600">વ્યાજ</span>
-              <span className="font-semibold text-green-700">
-                {row.interest > 0 ? `₹${row.interest}` : "-"}
-              </span>
-            </div>
-            {/* Fine */}
-            <div className="flex justify-between text-[10px]">
-              <span className="text-gray-600">દંડ</span>
-              <span className="font-semibold text-green-700">
-                {row.fine > 0 ? `₹${row.fine}` : "-"}
-              </span>
-            </div>
-            {/* Withdrawal */}
-            <div className="flex justify-between text-[10px]">
-              <span className="text-gray-600">ઉપાડ જમા</span>
-              <span className="font-semibold text-green-700">
-                {row.withdrawal > 0 ? `₹${row.withdrawal}` : "-"}
-              </span>
-            </div>
-            {/* New Withdrawal */}
-            <div className="flex justify-between text-[10px]">
-              <span className="text-gray-600">નવો ઉપાડ</span>
-              <span className="font-semibold text-green-700">
-                {row.newWithdrawal > 0 ? `₹${row.newWithdrawal}` : "-"}
-              </span>
-            </div>
-            {/* Total Installment + Interest */}
-            <div className="flex justify-between text-[10px]">
-              <span className="text-gray-600">કુલ (હપ્તો+વ્યાજ)</span>
-              <span className="font-semibold text-green-700">
-                {isChecked
-                  ? `₹${(row.installment + row.interest).toLocaleString()}`
-                  : "₹0"}
-              </span>
-            </div>
-            {/* Update Button */}
-            <button
-              onClick={() => handleRowAction(row)}
-              className="
+                  {/* Amount */}
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-gray-600">આ.નો ઉ.</span>
+                    <span className="font-semibold text-green-700">
+                      {carriedForwardAmount > 0
+                        ? `₹${carriedForwardAmount}`
+                        : row.amount > 0
+                        ? `₹${row.amount}`
+                        : "-"}
+                    </span>
+                  </div>
+                  {/* Interest */}
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-gray-600">વ્યાજ</span>
+                    <span className="font-semibold text-green-700">
+                      {row.interest > 0 ? `₹${row.interest}` : "-"}
+                    </span>
+                  </div>
+                  {/* Fine */}
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-gray-600">દંડ</span>
+                    <span className="font-semibold text-green-700">
+                      {row.fine > 0 ? `₹${row.fine}` : "-"}
+                    </span>
+                  </div>
+                  {/* Withdrawal */}
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-gray-600">ઉપાડ જમા</span>
+                    <span className="font-semibold text-green-700">
+                      {row.withdrawal > 0 ? `₹${row.withdrawal}` : "-"}
+                    </span>
+                  </div>
+                  {/* New Withdrawal */}
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-gray-600">નવો ઉપાડ</span>
+                    <span className="font-semibold text-green-700">
+                      {row.newWithdrawal > 0 ? `₹${row.newWithdrawal}` : "-"}
+                    </span>
+                  </div>
+                  {/* Total Installment + Interest */}
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-gray-600">કુલ (હપ્તો+વ્યાજ)</span>
+                    <span className="font-semibold text-green-700">
+                      {isChecked
+                        ? `₹${(
+                            row.installment + row.interest
+                          ).toLocaleString()}`
+                        : "₹0"}
+                    </span>
+                  </div>
+                  {/* Update Button */}
+                  <button
+                    onClick={() => handleRowAction(row)}
+                    className="
                 mt-2 w-full bg-green-700 text-white py-1
                 rounded text-[10px] active:scale-95
               "
-            >
-              Update
-            </button>
+                  >
+                    Update
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+        {/* Summary Calculations Section - Mobile Skeleton */}
+        {isMonthLoading || isTableDataLoading ? (
+          <div className="mt-6">
+            <div className="h-6 w-48 bg-gray-300 rounded animate-pulse mb-4"></div>
+            <div className="grid grid-cols-2 gap-3">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={`calc-skeleton-${index}`}
+                  className="bg-gray-100 border border-gray-200 rounded-md p-3 animate-pulse"
+                >
+                  <div className="h-4 w-24 bg-gray-300 rounded mb-2"></div>
+                  <div className="h-8 w-20 bg-gray-300 rounded"></div>
+                </div>
+              ))}
+            </div>
           </div>
-        );
-      })
-    )}
-  </div>
-  {/* Summary Calculations Section - Mobile Skeleton */}
-  {isMonthLoading || isTableDataLoading ? (
-    <div className="mt-6">
-      <div className="h-6 w-48 bg-gray-300 rounded animate-pulse mb-4"></div>
-      <div className="grid grid-cols-2 gap-3">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <div key={`calc-skeleton-${index}`} className="bg-gray-100 border border-gray-200 rounded-md p-3 animate-pulse">
-            <div className="h-4 w-24 bg-gray-300 rounded mb-2"></div>
-            <div className="h-8 w-20 bg-gray-300 rounded"></div>
-          </div>
-        ))}
-      </div>
-    </div>
-  ) : memberData.length > 0 && (
-    <div className="mt-6 md:mt-8">
-      <h3 className="text-lg font-semibold mb-4">
-        Summary Calculations (Month)
-      </h3>
-      <div className="grid grid-cols-2 gap-3">
-        <Card className="bg-blue-50 border-blue-200">
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-blue-600">
-                  કુલ હપ્તા
-                </p>
-                <p className="text-lg font-bold text-blue-800">
-                  ₹{calculations.totalInstallments.toLocaleString()}
-                </p>
-              </div>
-              <div className="h-6 w-6 bg-blue-100 rounded-full flex items-center justify-center">
-                <svg
-                  className="h-3 w-3 text-blue-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
-                  />
-                </svg>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-green-50 border-green-200">
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-green-600">
-                  કુલ બ્યાજ
-                </p>
-                <p className="text-lg font-bold text-green-800">
-                  ₹{calculations.totalInterest.toLocaleString()}
-                </p>
-              </div>
-              <div className="h-6 w-6 bg-green-100 rounded-full flex items-center justify-center">
-                <svg
-                  className="h-3 w-3 text-green-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-                  />
-                </svg>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-orange-50 border-orange-200">
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-orange-600">
-                  કુલ ઉપાડ જમા
-                </p>
-                <p className="text-lg font-bold text-orange-800">
-                  ₹{calculations.totalWithdrawals.toLocaleString()}
-                </p>
-              </div>
-              <div className="h-6 w-6 bg-orange-100 rounded-full flex items-center justify-center">
-                <svg
-                  className="h-3 w-3 text-orange-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M7 16l-4-4m0 0l4-4m-4 4h18"
-                  />
-                </svg>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-purple-50 border-purple-200">
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-purple-600">
-                  કુલ રકમ
-                </p>
-                <p className="text-lg font-bold text-purple-800">
-                  ₹{calculations.totalName.toLocaleString()}
-                </p>
-              </div>
-              <div className="h-6 w-6 bg-purple-100 rounded-full flex items-center justify-center">
-                <svg
-                  className="h-3 w-3 text-purple-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                  />
-                </svg>
+        ) : (
+          memberData.length > 0 && (
+            <div className="mt-6 md:mt-8">
+              <h3 className="text-lg font-semibold mb-4">
+                Summary Calculations (Month)
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                <Card className="bg-blue-50 border-blue-200">
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-medium text-blue-600">
+                          કુલ હપ્તા
+                        </p>
+                        <p className="text-lg font-bold text-blue-800">
+                          ₹{calculations.totalInstallments.toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="h-6 w-6 bg-blue-100 rounded-full flex items-center justify-center">
+                        <svg
+                          className="h-3 w-3 text-blue-600"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
+                          />
+                        </svg>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-green-50 border-green-200">
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-medium text-green-600">
+                          કુલ બ્યાજ
+                        </p>
+                        <p className="text-lg font-bold text-green-800">
+                          ₹{calculations.totalInterest.toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="h-6 w-6 bg-green-100 rounded-full flex items-center justify-center">
+                        <svg
+                          className="h-3 w-3 text-green-600"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                          />
+                        </svg>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-orange-50 border-orange-200">
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-medium text-orange-600">
+                          કુલ ઉપાડ જમા
+                        </p>
+                        <p className="text-lg font-bold text-orange-800">
+                          ₹{calculations.totalWithdrawals.toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="h-6 w-6 bg-orange-100 rounded-full flex items-center justify-center">
+                        <svg
+                          className="h-3 w-3 text-orange-600"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M7 16l-4-4m0 0l4-4m-4 4h18"
+                          />
+                        </svg>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-purple-50 border-purple-200">
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-medium text-purple-600">
+                          કુલ રકમ
+                        </p>
+                        <p className="text-lg font-bold text-purple-800">
+                          ₹{calculations.totalName.toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="h-6 w-6 bg-purple-100 rounded-full flex items-center justify-center">
+                        <svg
+                          className="h-3 w-3 text-purple-600"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                          />
+                        </svg>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  )}
+          )
+        )}
       </div>
 
-     <MobileFooter>
-  <div
-    className="
+      <MobileFooter>
+        <div
+          className="
       fixed bottom-0 left-0 right-0
       bg-white border-t shadow-md
       p-2
@@ -2012,84 +2062,88 @@ const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
       sm:hidden
       z-30
     "
-  >
-    <div className="relative">
-      <button
-        id="mobile-month-btn"
-        onClick={() =>
-          document.getElementById("mobile-month-trigger")?.click()
-        }
-        className="flex flex-col items-center mx-0.5 px-3"
-        disabled={isMonthLoading}
-      >
-        <Calendar className="h-6 w-6" />
-        <span className="text-[10px]">Month</span>
-      </button>
-      {/* Hidden Select Trigger */}
-      <Select value={selectedMonth} onValueChange={setSelectedMonth} disabled={isMonthLoading}>
-        <SelectTrigger
-          id="mobile-month-trigger"
-          className="absolute top-0 left-0 w-full h-full opacity-0 pointer-events-none"
         >
-          <SelectValue placeholder="Select month" />
-        </SelectTrigger>
-        <SelectContent
-          position="popper"
-          side="bottom"
-          align="center"
-          className="z-[9999]"
-        >
-          {months.map((month) => (
-            <SelectItem key={month} value={month}>
-              {new Date(month + "-01").toLocaleString("default", {
-                month: "short",
-                year: "numeric",
-              })}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-    {/* 2) Add Month */}
-    <button
-      onClick={handleAddNewMonth}
-      className="flex flex-col text-center items-center text-xs mx-0.5 px-3"
-      disabled={isMonthLoading}
-    >
-      {isAddingMonth ? (
-        <>
-          <div className="h-5 w-6 flex items-center justify-center">
-            <div className="h-3 w-3 bg-green-600 rounded-full animate-pulse"></div>
+          <div className="relative">
+            <button
+              id="mobile-month-btn"
+              onClick={() =>
+                document.getElementById("mobile-month-trigger")?.click()
+              }
+              className="flex flex-col items-center mx-0.5 px-3"
+              disabled={isMonthLoading}
+            >
+              <Calendar className="h-6 w-6" />
+              <span className="text-[10px]">Month</span>
+            </button>
+            {/* Hidden Select Trigger */}
+            <Select
+              value={selectedMonth}
+              onValueChange={setSelectedMonth}
+              disabled={isMonthLoading}
+            >
+              <SelectTrigger
+                id="mobile-month-trigger"
+                className="absolute top-0 left-0 w-full h-full opacity-0 pointer-events-none"
+              >
+                <SelectValue placeholder="Select month" />
+              </SelectTrigger>
+              <SelectContent
+                position="popper"
+                side="bottom"
+                align="center"
+                className="z-[9999]"
+              >
+                {months.map((month) => (
+                  <SelectItem key={month} value={month}>
+                    {new Date(month + "-01").toLocaleString("default", {
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <span className="text-[10px]">Adding...</span>
-        </>
-      ) : (
-        <>
-          <Plus className="h-5 w-6" />
-          <span className="text-[10px]">Add month</span>
-        </>
-      )}
-    </button>
-    {/* 3) Add Member Dialog */}
-    <button
-      onClick={() => setIsAddMemberDialogOpen(true)}
-      className="flex flex-col items-center text-xs"
-      disabled={isMonthLoading}
-    >
-      <IoPersonAdd className="h-5 w-5 gap-1.5" />
-      <span className="text-[10px]">Add Member</span>
-    </button>
-    {/* 4) Hapto Dialog */}
-    <button
-      onClick={() => setIsHaptoDialogOpen(true)}
-      className="flex flex-col items-center text-xs px-3"
-      disabled={isMonthLoading}
-    >
-      <TbTransactionRupee className="h-5 w-5" />
-      <span className="text-[10px]">Hapto</span>
-    </button>
-  </div>
-    </MobileFooter>
+          {/* 2) Add Month */}
+          <button
+            onClick={handleAddNewMonth}
+            className="flex flex-col text-center items-center text-xs mx-0.5 px-3"
+            disabled={isMonthLoading}
+          >
+            {isAddingMonth ? (
+              <>
+                <div className="h-5 w-6 flex items-center justify-center">
+                  <div className="h-3 w-3 bg-green-600 rounded-full animate-pulse"></div>
+                </div>
+                <span className="text-[10px]">Adding...</span>
+              </>
+            ) : (
+              <>
+                <Plus className="h-5 w-6" />
+                <span className="text-[10px]">Add month</span>
+              </>
+            )}
+          </button>
+          {/* 3) Add Member Dialog */}
+          <button
+            onClick={() => setIsAddMemberDialogOpen(true)}
+            className="flex flex-col items-center text-xs"
+            disabled={isMonthLoading}
+          >
+            <IoPersonAdd className="h-5 w-5 gap-1.5" />
+            <span className="text-[10px]">Add Member</span>
+          </button>
+          {/* 4) Hapto Dialog */}
+          <button
+            onClick={() => setIsHaptoDialogOpen(true)}
+            className="flex flex-col items-center text-xs px-3"
+            disabled={isMonthLoading}
+          >
+            <TbTransactionRupee className="h-5 w-5" />
+            <span className="text-[10px]">Hapto</span>
+          </button>
+        </div>
+      </MobileFooter>
     </>
   );
 }

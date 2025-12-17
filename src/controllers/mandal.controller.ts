@@ -202,7 +202,6 @@ export async function updateMandalInstallment(request: AuthenticatedRequest) {
       );
     }
 
-    // 1. Update mandal's default installment
     const mandal = await Mandal.findById(mandalId);
     if (!mandal)
       return NextResponse.json({ error: "Mandal not found" }, { status: 404 });
@@ -211,17 +210,14 @@ export async function updateMandalInstallment(request: AuthenticatedRequest) {
     mandal.setInstallment = installment;
     await mandal.save();
 
-    // 2. Get all unique months sorted chronologically
     const uniqueMonths = await MemberData.distinct("month", { mandal: mandalId });
     
-    // Sort months from oldest to newest
     uniqueMonths.sort((a, b) => {
       const dateA = new Date(a + "-01");
       const dateB = new Date(b + "-01");
       return dateA.getTime() - dateB.getTime();
     });
 
-    // Find selected month index
     const selectedIndex = uniqueMonths.indexOf(selectedMonth);
     
     if (selectedIndex === -1) {
@@ -231,20 +227,17 @@ export async function updateMandalInstallment(request: AuthenticatedRequest) {
       );
     }
 
-    // Get months to update: selected month and ALL FUTURE months
     const monthsToUpdate = uniqueMonths.slice(selectedIndex);
     console.log("Months to update:", monthsToUpdate);
     console.log("Previous installment:", previousInstallment);
     console.log("New installment:", installment);
 
     if (!isUpdate) {
-      // FIRST TIME SETTING HAPTO
-      // Update only FUTURE months where installment is 0
       const updateResult = await MemberData.updateMany(
         {
           mandal: mandalId,
           month: { $in: monthsToUpdate },
-          installment: 0 // Only update records with 0 installment
+          installment: 0 
         },
         {
           $set: { installment }
@@ -262,9 +255,6 @@ export async function updateMandalInstallment(request: AuthenticatedRequest) {
         { status: 200 }
       );
     } else {
-      // UPDATING EXISTING HAPTO
-      // IMPORTANT: Update only records where installment equals mandal's OLD setInstallment
-      // OR where installment is 0
       const updateResult = await MemberData.updateMany(
         {
           mandal: mandalId,
