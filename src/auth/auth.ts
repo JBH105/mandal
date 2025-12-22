@@ -4,17 +4,19 @@ export interface MemberData {
   _id: string;
   mandal: string;
   subUser: { _id: string; subUserName: string; phoneNumber: string };
-  month: string;
+  monthId: string;
   installment: number;
-  amount: number;
+  withdrawal: number;
   interest: number;
   fine: number;
-  withdrawal: number;
+  paidWithdrawal: number;
   newWithdrawal: number;
   total: number; 
-  outerCheckbox: boolean;   
-  innerCheckbox: boolean;
+  // outerCheckbox: boolean;   
+  // innerCheckbox: boolean;
   pendingInstallment: number;
+  paidInstallment : number ;
+  paidInterest : number ;
 }
 
 export interface SubUser {
@@ -37,7 +39,6 @@ export const createMandal = async (data: {
   confirmPassword: string;
   establishedDate: string;
   isActive: boolean;
-  innerCheckbox?: boolean;
 }) => {
   const response = await api.post("/mandal", data);
   return response.data;
@@ -63,7 +64,7 @@ export const deleteMandal = async (id: string) => {
   return response.data;
 };
 
-export const createMandalSubUserApi = async (data: { subUserName: string; phoneNumber: string }) => {
+export const createMandalSubUserApi = async (data: { subUserName: string; phoneNumber: string  , monthId : string }) => {
   const response = await api.post("/mandalSubUser", data);
   return response.data;
 };
@@ -74,51 +75,57 @@ export const getMandalSubUsersApi = async () => {
 };
 
 export const createMemberDataApi = async (data: {
-  subUserId: string;
-  month: string;
-  installment: number;
-  amount: number;
-  interest: number;
-  fine: number;
-  withdrawal: number;
+    _id: string;
+  paidInstallment: number;
+  paidWithdrawal: number;
   newWithdrawal: number;
-  outerCheckbox: boolean;   
-  innerCheckbox: boolean;  
+  fine: number;
+
 }) => {
   const response = await api.post("/memberData", data);
   return response.data;
 };
 
-export const getMemberDataApi = async (month: string): Promise<MemberData[]> => {
-  const response = await api.get(`/memberData?month=${month}`);
+export const getMemberDataApi = async (monthId: string): Promise<MemberData[]> => {
+  const response = await api.get(`/memberData?monthId=${monthId}`);
   return response.data as MemberData[];
 };
 
-export const initializeMonthDataApi = async (month: string) => {
-  const response = await api.post("/memberData/initialize", { month });
-  return response.data;
-};
+// export const initializeMonthDataApi = async (month: string) => {
+//   const response = await api.post("/memberData/initialize", { month });
+//   return response.data;
+// };
 
-export const getAllMonthsApi = async (): Promise<string[]> => {
-  const response = await api.get(`/memberData?allMonths=true`);
-  return response.data as string[];
-};
+// export const getAllMonthsApi = async (): Promise<string[]> => {
+//   const response = await api.get(`/memberData?allMonths=true`);
+//   return response.data as string[];
+// };
 
-export const getAvailableSubUsersApi = async (month: string): Promise<SubUser[]> => {
-  const response = await api.get(`/memberData/availableSubUsers?month=${month}`);
+export const getAvailableSubUsersApi = async (monthId: string): Promise<SubUser[]> => {
+  const response = await api.get(`/memberData/availableSubUsers?monthId=${monthId}`);
   return response.data as SubUser[];
 };
 
-// Updated function with isUpdate parameter
-export const updateMandalInstallmentApi = async (
-  installment: number,
-  selectedMonth: string,
-  isUpdate: boolean = false
+
+export const setNewInstallmentApi = async (
+  monthId: string,
+  installment: number
 ) => {
-  const response = await api.put("/mandal/installment", {
-    installment,
-    selectedMonth,
-    isUpdate
+  const response = await api.post("/month/installment", {
+    monthId,
+    installment: Number(installment), 
   });
+  return response.data;
+};
+
+
+export const getMonthApi = async (): Promise<{ _id: string; month: string }[]> => {
+  const response = await api.get("/month");
+  return response.data;
+};
+
+
+export const addNewMonthApi = async () => {
+  const response = await api.post("/month");
   return response.data;
 };

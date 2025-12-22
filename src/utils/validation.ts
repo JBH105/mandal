@@ -80,26 +80,22 @@ export const validateMandalSubUserCreation = (data: { subUserName: string; phone
 
 // Validation function for MemberData creation
 export const validateMemberDataCreation = (data: {
-  subUserId: string;
-  month: string;
+  id: string;
   installment: number;
-  amount: number;
   interest: number;
   fine: number;
-  withdrawal: number;
   newWithdrawal: number;
-  pendingInstallment:number;
+  paidInstallment:number;
+  paidWithdrawal:number;
 }) => {
   const schema = z.object({
-    subUserId: z.string().min(1, 'Sub-user ID is required'),
-    month: z.string().regex(/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format'),
+    id: z.string().min(1, 'ID is required'),
     installment: z.number().min(0, 'Installment must be a non-negative number'),
-    amount: z.number().min(0, 'Amount must be a non-negative number'),
     interest: z.number().min(0, 'Interest must be a non-negative number'),
     fine: z.number().min(0, 'Fine must be a non-negative number'),
-    withdrawal: z.number().min(0, 'Withdrawal must be a non-negative number'),
     newWithdrawal: z.number().min(0, 'New withdrawal must be a non-negative number'),
-    pendingInstallment : z.number().min(0, 'New withdrawal must be a non-negative number'),
+    paidInstallment : z.number().min(0, 'New withdrawal must be a non-negative number'),
+    paidWithdrawal : z.number().min(0, 'New paidWithdrawal must be a non-negative number'),
   });
   return schema.parse(data);
 };

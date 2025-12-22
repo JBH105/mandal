@@ -4,15 +4,19 @@ import { connectToDB } from "@/config/db";
 import Mandal from "@/model/Mandal";
 import { NextResponse } from "next/server";
 import { validateMandalCreation } from "@/utils/validation";
-import { authMiddleware, AuthenticatedRequest } from "@/middleware/authMiddleware";
+import {
+  authMiddleware,
+  AuthenticatedRequest,
+} from "@/middleware/authMiddleware";
 import MemberData from "@/model/MemberData";
 import MandalSubUser from "@/model/MandalSubUser";
 import mongoose from "mongoose";
+import MandalMonth from "@/model/MandalMonth";
 
 export async function createMandal(request: AuthenticatedRequest) {
   try {
     // Apply auth middleware (admin role required)
-    const authResult = await authMiddleware(request, 'admin');
+    const authResult = await authMiddleware(request, "admin");
     if (authResult) return authResult;
 
     await connectToDB();
@@ -26,12 +30,15 @@ export async function createMandal(request: AuthenticatedRequest) {
       phoneNumber,
       password,
       establishedDate,
-      isActive
+      isActive,
     } = validateMandalCreation(body);
 
     const existingMandal = await Mandal.findOne({ phoneNumber });
     if (existingMandal) {
-      return NextResponse.json({ error: "Phone number already in use" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Phone number already in use" },
+        { status: 400 }
+      );
     }
 
     const mandal = new Mandal({
@@ -46,10 +53,28 @@ export async function createMandal(request: AuthenticatedRequest) {
 
     await mandal.save();
 
-    return NextResponse.json({ message: "Mandal created successfully" }, { status: 201 });
+    const d = new Date(mandal.establishedDate);
+    const year = d.getUTCFullYear();
+    const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+
+    const result = `${year}-${month}`;
+    const monthBody = {
+      mandal: mandal._id,
+      month: result,
+    };
+
+    MandalMonth.create(monthBody);
+
+    return NextResponse.json(
+      { message: "Mandal created successfully" },
+      { status: 201 }
+    );
   } catch (error: unknown) {
     console.error("Error creating mandal:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
 
@@ -64,7 +89,7 @@ export async function getMandals(request: AuthenticatedRequest) {
     const { decoded } = request;
 
     // If user is a mandal, return only their own mandal data
-    if (decoded?.role === 'mandal') {
+    if (decoded?.role === "mandal") {
       const mandalData = await Mandal.findById(decoded.id, "-password");
       return NextResponse.json([mandalData], { status: 200 });
     }
@@ -74,15 +99,18 @@ export async function getMandals(request: AuthenticatedRequest) {
 
     return NextResponse.json(mandals, { status: 200 });
   } catch (error: unknown) {
-    console.log("🚀 ~ getMandals ~ error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    console.log("🚀 ~ getMandals ~ error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
 
 export async function updateMandal(request: AuthenticatedRequest) {
   try {
     // Apply auth middleware (admin role required)
-    const authResult = await authMiddleware(request, 'admin');
+    const authResult = await authMiddleware(request, "admin");
     if (authResult) return authResult;
 
     await connectToDB();
@@ -91,7 +119,10 @@ export async function updateMandal(request: AuthenticatedRequest) {
     const id = searchParams.get("id");
 
     if (!id) {
-      return NextResponse.json({ error: "Mandal ID is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Mandal ID is required" },
+        { status: 400 }
+      );
     }
 
     const body = await request.json();
@@ -99,7 +130,10 @@ export async function updateMandal(request: AuthenticatedRequest) {
 
     // Validate input
     if (!nameEn || !nameGu || !userName) {
-      return NextResponse.json({ error: "nameEn, nameGu, and userName are required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "nameEn, nameGu, and userName are required" },
+        { status: 400 }
+      );
     }
 
     const mandal = await Mandal.findById(id);
@@ -115,10 +149,16 @@ export async function updateMandal(request: AuthenticatedRequest) {
 
     await mandal.save();
 
-    return NextResponse.json({ message: "Mandal updated successfully" }, { status: 200 });
+    return NextResponse.json(
+      { message: "Mandal updated successfully" },
+      { status: 200 }
+    );
   } catch (error: unknown) {
-    console.log("🚀 ~ updateMandal ~ error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    console.log("🚀 ~ updateMandal ~ error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
 
@@ -146,21 +186,25 @@ export async function deleteMandal(request: AuthenticatedRequest) {
       );
     }
 
-    const objectId = new mongoose.Types.ObjectId(id); 
+    const objectId = new mongoose.Types.ObjectId(id);
 
     const mandal = await Mandal.findById(objectId);
     if (!mandal) {
-      return NextResponse.json(
-        { error: "Mandal not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Mandal not found" }, { status: 404 });
     }
 
-    const memberDeleteResult = await MemberData.deleteMany({ mandal: objectId });
-    const subUserDeleteResult = await MandalSubUser.deleteMany({ mandal: objectId });
+    const memberDeleteResult = await MemberData.deleteMany({
+      mandal: objectId,
+    });
+    const subUserDeleteResult = await MandalSubUser.deleteMany({
+      mandal: objectId,
+    });
 
     console.log("Deleted MemberData count:", memberDeleteResult.deletedCount);
-    console.log("Deleted MandalSubUser count:", subUserDeleteResult.deletedCount);
+    console.log(
+      "Deleted MandalSubUser count:",
+      subUserDeleteResult.deletedCount
+    );
 
     await Mandal.findByIdAndDelete(objectId);
 
@@ -183,107 +227,110 @@ export async function deleteMandal(request: AuthenticatedRequest) {
   }
 }
 
-export async function updateMandalInstallment(request: AuthenticatedRequest) {
-  try {
-    const authResult = await authMiddleware(request);
-    if (authResult) return authResult;
+// export async function updateMandalInstallment(request: AuthenticatedRequest) {
+//   try {
+//     const authResult = await authMiddleware(request);
+//     if (authResult) return authResult;
 
-    await connectToDB();
+//     await connectToDB();
 
-    const mandalId = request.decoded?.id;
+//     const mandalId = request.decoded?.id;
 
-    const body = await request.json();
-    const { installment, selectedMonth, isUpdate = false } = body;
+//     const body = await request.json();
+//     const { installment, selectedMonth, isUpdate = false } = body;
 
-    if (!mandalId || installment == null || !selectedMonth) {
-      return NextResponse.json(
-        { error: "Installment and selectedMonth are required" },
-        { status: 400 }
-      );
-    }
+//     if (!mandalId || installment == null || !selectedMonth) {
+//       return NextResponse.json(
+//         { error: "Installment and selectedMonth are required" },
+//         { status: 400 }
+//       );
+//     }
 
-    const mandal = await Mandal.findById(mandalId);
-    if (!mandal)
-      return NextResponse.json({ error: "Mandal not found" }, { status: 404 });
+//     const mandal = await Mandal.findById(mandalId);
+//     if (!mandal)
+//       return NextResponse.json({ error: "Mandal not found" }, { status: 404 });
 
-    const previousInstallment = mandal.setInstallment || 0;
-    mandal.setInstallment = installment;
-    await mandal.save();
+//     const previousInstallment = mandal.setInstallment || 0;
+//     mandal.setInstallment = installment;
+//     await mandal.save();
 
-    const uniqueMonths = await MemberData.distinct("month", { mandal: mandalId });
-    
-    uniqueMonths.sort((a, b) => {
-      const dateA = new Date(a + "-01");
-      const dateB = new Date(b + "-01");
-      return dateA.getTime() - dateB.getTime();
-    });
+//     const uniqueMonths = await MemberData.distinct("month", {
+//       mandal: mandalId,
+//     });
 
-    const selectedIndex = uniqueMonths.indexOf(selectedMonth);
-    
-    if (selectedIndex === -1) {
-      return NextResponse.json(
-        { error: "Selected month not found" },
-        { status: 400 }
-      );
-    }
+//     uniqueMonths.sort((a, b) => {
+//       const dateA = new Date(a + "-01");
+//       const dateB = new Date(b + "-01");
+//       return dateA.getTime() - dateB.getTime();
+//     });
 
-    const monthsToUpdate = uniqueMonths.slice(selectedIndex);
-    console.log("Months to update:", monthsToUpdate);
-    console.log("Previous installment:", previousInstallment);
-    console.log("New installment:", installment);
+//     const selectedIndex = uniqueMonths.indexOf(selectedMonth);
 
-    if (!isUpdate) {
-      const updateResult = await MemberData.updateMany(
-        {
-          mandal: mandalId,
-          month: { $in: monthsToUpdate },
-          installment: 0 
-        },
-        {
-          $set: { installment }
-        }
-      );
+//     if (selectedIndex === -1) {
+//       return NextResponse.json(
+//         { error: "Selected month not found" },
+//         { status: 400 }
+//       );
+//     }
 
-      return NextResponse.json(
-        {
-          message: "Hapto set for the first time. Applied to SELECTED month and FUTURE months where installment was 0.",
-          updatedMonths: monthsToUpdate,
-          updatedCount: updateResult.modifiedCount,
-          setInstallment: installment,
-          isFirstTime: true
-        },
-        { status: 200 }
-      );
-    } else {
-      const updateResult = await MemberData.updateMany(
-        {
-          mandal: mandalId,
-          month: { $in: monthsToUpdate },
-          $or: [
-            { installment: previousInstallment },
-            { installment: 0 }
-          ]
-        },
-        {
-          $set: { installment }
-        }
-      );
+//     const monthsToUpdate = uniqueMonths.slice(selectedIndex);
+//     console.log("Months to update:", monthsToUpdate);
+//     console.log("Previous installment:", previousInstallment);
+//     console.log("New installment:", installment);
 
-      return NextResponse.json(
-        {
-          message: "Hapto updated. Applied to selected month and future months.",
-          updatedMonths: monthsToUpdate,
-          updatedCount: updateResult.modifiedCount,
-          previousInstallment,
-          setInstallment: installment,
-          isUpdate: true
-        },
-        { status: 200 }
-      );
-    }
+//     if (!isUpdate) {
+//       const updateResult = await MemberData.updateMany(
+//         {
+//           mandal: mandalId,
+//           month: { $in: monthsToUpdate },
+//           installment: 0,
+//         },
+//         {
+//           $set: { installment },
+//         }
+//       );
 
-  } catch (error) {
-    console.error("Installment update error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
+//       return NextResponse.json(
+//         {
+//           message:
+//             "Hapto set for the first time. Applied to SELECTED month and FUTURE months where installment was 0.",
+//           updatedMonths: monthsToUpdate,
+//           updatedCount: updateResult.modifiedCount,
+//           setInstallment: installment,
+//           isFirstTime: true,
+//         },
+//         { status: 200 }
+//       );
+//     } else {
+//       const updateResult = await MemberData.updateMany(
+//         {
+//           mandal: mandalId,
+//           month: { $in: monthsToUpdate },
+//           $or: [{ installment: previousInstallment }, { installment: 0 }],
+//         },
+//         {
+//           $set: { installment },
+//         }
+//       );
+
+//       return NextResponse.json(
+//         {
+//           message:
+//             "Hapto updated. Applied to selected month and future months.",
+//           updatedMonths: monthsToUpdate,
+//           updatedCount: updateResult.modifiedCount,
+//           previousInstallment,
+//           setInstallment: installment,
+//           isUpdate: true,
+//         },
+//         { status: 200 }
+//       );
+//     }
+//   } catch (error) {
+//     console.error("Installment update error:", error);
+//     return NextResponse.json(
+//       { error: "Internal server error" },
+//       { status: 500 }
+//     );
+//   }
+// }

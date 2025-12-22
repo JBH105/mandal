@@ -37,11 +37,11 @@ import {
   createMandalSubUserApi,
   createMemberDataApi,
   getMemberDataApi,
-  getAllMonthsApi,
-  initializeMonthDataApi,
   MemberData,
   SubUser,
-  updateMandalInstallmentApi,
+  getMonthApi,
+  addNewMonthApi,
+  setNewInstallmentApi,
 } from "@/auth/auth";
 import { showErrorToast, showSuccessToast } from "@/middleware/lib/toast";
 import {
@@ -50,27 +50,29 @@ import {
   formatPhoneNumber,
   ValidationErrors,
 } from "./validation";
-import { AxiosError } from "axios";
 import { SkeletonCard, SkeletonTable, Loader } from "@/components/ui/loader";
 import { MobileFooter } from "@/components/ui/mobile-footer";
 import { IoPersonAdd } from "react-icons/io5";
 import { TbTransactionRupee } from "react-icons/tb";
+
 interface FormData {
   subUserId: string;
   installment: string;
-  amount: string;
+  withdrawal: string;
   interest: string;
   fine: string;
-  withdrawal: string;
+  paidWithdrawal: string;
   newWithdrawal: string;
-  outerCheckbox: boolean;
-  innerCheckbox: boolean;
   pendingInstallment: string;
+  paidInstallment: string;
+  paidInterest: string;
 }
+
 export interface NewMemberForm {
   subUserName: string;
   phoneNumber: string;
 }
+
 export default function AnalyticsPage() {
   const [mandalName, setMandalName] = useState<string>("આઈ શ્રી ખોડિયાર");
   const [establishedDate, setEstablishedDate] = useState<string | null>(null);
@@ -80,23 +82,21 @@ export default function AnalyticsPage() {
   const [filteredMemberData, setFilteredMemberData] = useState<MemberData[]>(
     []
   );
-  const [months, setMonths] = useState<string[]>([]);
+  const [months, setMonths] = useState<{ _id: string; month: string }[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<string>("");
-  // const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState<boolean>(false);
   const [formData, setFormData] = useState<FormData>({
     subUserId: "",
     installment: "",
-    amount: "",
+    withdrawal: "",
     interest: "",
     fine: "",
-    withdrawal: "",
+    paidWithdrawal: "",
     newWithdrawal: "",
-    innerCheckbox: false,
-    outerCheckbox: false,
     pendingInstallment: "",
+    paidInstallment: "",
+    paidInterest: "",
   });
-  console.log("🚀 ~ AnalyticsPage ~ installment :", formData?.installment);
   const [selectedMemberName, setSelectedMemberName] = useState<string>("");
   const [isAddMemberDialogOpen, setIsAddMemberDialogOpen] =
     useState<boolean>(false);
@@ -108,10 +108,7 @@ export default function AnalyticsPage() {
   const [touched, setTouched] = useState<{
     subUserName: boolean;
     phoneNumber: boolean;
-  }>({
-    subUserName: false,
-    phoneNumber: false,
-  });
+  }>({ subUserName: false, phoneNumber: false });
   const [isDashboardLoading, setIsDashboardLoading] = useState(true);
   const [isAddingMonth, setIsAddingMonth] = useState<boolean>(false);
   const [isTableLoading, setIsTableLoading] = useState<boolean>(false);
@@ -133,91 +130,141 @@ export default function AnalyticsPage() {
   const [newMonthName, setNewMonthName] = useState<string>("");
   const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
 
-  // Add to your existing state variables
-  const [installmentError, setInstallmentError] = useState<string>("");
-  const [requiredInstallmentAmount, setRequiredInstallmentAmount] =
-    useState<number>(0);
+  const getSelectedMonthObjectId = (): string | null => {
+    if (!selectedMonth) return null;
+    const found = months.find((m) => m.month === selectedMonth);
+    return found?._id || null;
+  };
+
+  const getDisplayInstallmentValue = (row: MemberData) => {
+    const regularInstallment =
+      row.installment === 0 && mandalMonthlyInstallment > 0
+        ? mandalMonthlyInstallment
+        : row.installment;
+
+    const pending = row.pendingInstallment || 0;
+    // const interest = row.interest || 0;
+
+    const total = regularInstallment;
+    return {
+      value: total,
+      hasPending: pending > 0,
+      pendingAmount: pending,
+    };
+  };
+
+  const getCurrentMonth = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = (now.getMonth() + 1).toString().padStart(2, "0");
+    return `${year}-${month}`;
+  };
 
   useEffect(() => {
-    if (searchQuery.trim() === "") {
-      setFilteredMemberData(memberData);
-    } else {
-      const filtered = memberData.filter((member) =>
-        member.subUser.subUserName
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase())
-      );
-      setFilteredMemberData(filtered);
-    }
-  }, [searchQuery, memberData]);
+    if (!selectedMonth || months.length === 0) return;
+
+    const fetchMemberDataForMonth = async () => {
+      try {
+        setIsTableDataLoading(true);
+
+        const monthId = getSelectedMonthObjectId();
+        if (!monthId) {
+          showErrorToast("Month ID not found");
+          return;
+        }
+
+        const data = await getMemberDataApi(monthId);
+        setMemberData(data);
+        setFilteredMemberData(data);
+
+        // const currentIndex = months.findIndex((m) => m.month === selectedMonth);
+        // if (currentIndex >= 0 && currentIndex < months.length - 1) {
+        //   const previousMonthId = months[currentIndex + 1]._id;
+        //   const prevData = await getMemberDataApi(previousMonthId);
+        //   setPreviousMonthData(prevData);
+        // } else {
+        //   setPreviousMonthData([]);
+        // }
+      } catch (error) {
+        console.error("Error fetching member data:", error);
+        showErrorToast("Failed to load member data");
+      } finally {
+        setIsTableDataLoading(false);
+      }
+    };
+
+    fetchMemberDataForMonth();
+  }, [selectedMonth, months]);
 
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
         setIsDashboardLoading(true);
+
         const mandals = await getMandals();
-        if (mandals.length > 0) {
-          const currentMandal = mandals[0];
-          setMandalName(currentMandal.nameGu);
-          setEstablishedDate(currentMandal.establishedDate);
-          const currentMandalId = currentMandal._id;
-          setMandalId(currentMandalId);
-          const backendInstallment = currentMandal.setInstallment || 0;
-          setMandalMonthlyInstallment(backendInstallment);
-          setIsHaptoSet(backendInstallment > 0);
-          setHaptoLabelValue(
-            backendInstallment > 0 ? `Hapto: ₹${backendInstallment}` : ""
-          );
-          const [users, allMonths] = await Promise.all([
-            getMandalSubUsersApi(),
-            getAllMonthsApi(),
-          ]);
-          setSubUsers(users);
-          const validMonths = Array.isArray(allMonths) ? allMonths : [];
-          if (validMonths.length > 0) {
-            const sortedMonths = [...validMonths].sort((a, b) => {
-              const dateA = new Date(a + "-01");
-              const dateB = new Date(b + "-01");
-              return dateB.getTime() - dateA.getTime();
-            });
-            setMonths(sortedMonths);
-            const defaultMonth = sortedMonths[0];
-            // if (typeof window !== "undefined" && currentMandalId) {
-            // const savedMonth = localStorage.getItem(
-            // LOCAL_STORAGE_KEYS.MONTH_SELECTED(currentMandalId)
-            // );
-            // if (savedMonth && sortedMonths.includes(savedMonth)) {
-            // defaultMonth = savedMonth;
-            // }
-            // }
-            setSelectedMonth(defaultMonth);
-            if (defaultMonth) {
-              const data: MemberData[] = await getMemberDataApi(defaultMonth);
-              setMemberData(data);
-              setFilteredMemberData(data);
-              const currentMonthIndex = sortedMonths.indexOf(defaultMonth);
-              if (currentMonthIndex > 0) {
-                const previousMonth = sortedMonths[currentMonthIndex - 1];
-                const prevData: MemberData[] = await getMemberDataApi(
-                  previousMonth
-                );
-                setPreviousMonthData(prevData);
-              }
-              setHasDataLoaded(true);
-            }
-          } else {
-            setMonths([]);
-            setSelectedMonth("");
-            setMemberData([]);
-            setFilteredMemberData([]);
-            setHasDataLoaded(true);
-            showSuccessToast(
-              "Welcome to your new mandal! Start by adding your first member."
-            );
-          }
-        } else {
+        if (mandals.length === 0) {
           setMandalName("No Mandal Found");
           setHasDataLoaded(true);
+          return;
+        }
+
+        const currentMandal = mandals[0];
+        setMandalName(currentMandal.nameGu);
+        setEstablishedDate(currentMandal.establishedDate);
+        setMandalId(currentMandal._id);
+
+        const backendInstallment = currentMandal.setInstallment || 0;
+        setMandalMonthlyInstallment(backendInstallment);
+        setIsHaptoSet(backendInstallment > 0);
+
+        const [users, monthResponse] = await Promise.all([
+          getMandalSubUsersApi(),
+          getMonthApi(),
+        ]);
+
+        setSubUsers(users);
+
+        const monthObjects = Array.isArray(monthResponse)
+          ? monthResponse
+              .filter((m) => m && m._id && m.month)
+              .sort((a, b) => {
+                const da = new Date(a.month + "-01");
+                const db = new Date(b.month + "-01");
+                return db.getTime() - da.getTime();
+              })
+          : [];
+
+        setMonths(monthObjects);
+
+        if (monthObjects.length > 0) {
+          const defaultMonthName = monthObjects[0].month;
+          const defaultMonthId = monthObjects[0]._id;
+
+          setSelectedMonth(defaultMonthName);
+
+          // ✅ ID પાસ કરીને ડેટા મેળવો
+          const data = await getMemberDataApi(defaultMonthId);
+          setMemberData(data);
+          setFilteredMemberData(data);
+
+          // if (monthObjects.length > 1) {
+          //   const previousMonthId = monthObjects[1]._id;
+          //   const prevData = await getMemberDataApi(previousMonthId);
+          //   setPreviousMonthData(prevData);
+          // } else {
+          //   setPreviousMonthData([]);
+          // }
+
+          setHasDataLoaded(true);
+        } else {
+          setMonths([]);
+          setSelectedMonth("");
+          setMemberData([]);
+          setFilteredMemberData([]);
+          setHasDataLoaded(true);
+          showSuccessToast(
+            "Welcome to your new mandal! Start by adding your first member."
+          );
         }
       } catch (error) {
         console.error("Error fetching initial data:", error);
@@ -227,65 +274,26 @@ export default function AnalyticsPage() {
         setIsDashboardLoading(false);
       }
     };
+
     fetchInitialData();
   }, []);
 
-  useEffect(() => {
-    if (!selectedMonth) return;
-
-    const fetchMemberData = async () => {
-      setIsMonthLoading(true);
-      setIsTableDataLoading(true);
-
-      try {
-        const data: MemberData[] = await getMemberDataApi(selectedMonth);
-        setMemberData(data);
-        setFilteredMemberData(data);
-
-        const currentMonthIndex = months.indexOf(selectedMonth);
-        if (currentMonthIndex > 0 && months.length > 1) {
-          const previousMonth = months[currentMonthIndex - 1];
-          const prevData: MemberData[] = await getMemberDataApi(previousMonth);
-          setPreviousMonthData(prevData);
-        } else {
-          setPreviousMonthData([]);
-        }
-      } catch (error) {
-        console.log(error);
-        showErrorToast("Error fetching member data:");
-      } finally {
-        setIsMonthLoading(false);
-        setIsTableDataLoading(false);
-      }
-    };
-
-    fetchMemberData();
-  }, [selectedMonth, months]);
-
-  const getCurrentMonth = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = (now.getMonth() + 1).toString().padStart(2, "0");
-    return `${year}-${month}`;
-  };
-
   const calculations = useMemo(() => {
-    const totalInstallments = memberData.reduce((sum, row) => {
-      if (!row.outerCheckbox) return sum;
-      const rowInstallment =
-        row.installment === 0 && mandalMonthlyInstallment > 0
-          ? mandalMonthlyInstallment
-          : row.installment;
-      return sum + rowInstallment;
-    }, 0);
-    const totalAmount = memberData.reduce((sum, row) => sum + row.amount, 0);
+    const totalInstallments = memberData.reduce(
+      (sum, row) => sum + (row.paidInstallment || 0),
+      0
+    );
+    const totalAmount = memberData.reduce(
+      (sum, row) => sum + row.paidWithdrawal,
+      0
+    );
     const totalInterest = memberData.reduce(
       (sum, row) => sum + row.interest,
       0
     );
     const totalFines = memberData.reduce((sum, row) => sum + row.fine, 0);
     const totalWithdrawals = memberData.reduce(
-      (sum, row) => sum + row.withdrawal,
+      (sum, row) => sum + row.paidWithdrawal,
       0
     );
     const totalNewWithdrawals = memberData.reduce(
@@ -294,20 +302,11 @@ export default function AnalyticsPage() {
     );
     const totalMembers = memberData.length;
     const totalName = memberData.reduce((sum, row) => {
-      if (!row.outerCheckbox) {
-        return sum + row.interest + row.withdrawal;
-      }
-      const rowInstallment =
-        row.installment === 0 && mandalMonthlyInstallment > 0
-          ? mandalMonthlyInstallment
-          : row.installment;
-      return sum + rowInstallment + row.interest + row.withdrawal;
+      const paidInstallment = row.paidInstallment || 0;
+      const interestToAdd = paidInstallment > 0 ? row.interest || 0 : 0;
+      return sum + paidInstallment + interestToAdd + (row.paidWithdrawal || 0);
     }, 0);
-    const bandSilak = totalName - totalNewWithdrawals;
-    const Mandalcash = 0 + bandSilak;
-    const interestPerPerson =
-      totalMembers > 0 ? totalInterest / totalMembers : 0;
-    const perPerson = totalMembers > 0 ? bandSilak / totalMembers : 0;
+
     return {
       totalInstallments,
       totalAmount,
@@ -318,183 +317,92 @@ export default function AnalyticsPage() {
       grandTotal: 0,
       totalMembers,
       totalName,
-      bandSilak,
-      Mandalcash,
-      interestPerPerson,
-      perPerson,
     };
-  }, [memberData, mandalMonthlyInstallment]);
+  }, [memberData]);
 
   const calculateCarriedForwardAmount = (memberId: string) => {
-    // Only apply carried forward for the NEWEST month
-    if (months[0] !== selectedMonth) return 0;
-    // Get previous month
-    if (months.length < 2) return 0;
-    const previousMonth = months[1]; // newest = 0, previous = 1
+    const currentIndex = months.findIndex((m) => m.month === selectedMonth);
+    if (currentIndex === -1 || currentIndex === months.length - 1) return 0;
+
+    const previousMonthId = months[currentIndex + 1]._id;
     const previousData = previousMonthData.find(
       (data) => data.subUser._id === memberId
     );
     if (!previousData) return 0;
+
     return (
-      previousData.amount + previousData.newWithdrawal - previousData.withdrawal
+      previousData.withdrawal +
+      previousData.newWithdrawal -
+      previousData.paidWithdrawal
     );
   };
 
   const getFilteredErrors = () => {
     const allErrors = validateNewMemberForm(newMemberData);
     const filtered: ValidationErrors = {};
-    if (touched.subUserName && allErrors.subUserName) {
+    if (touched.subUserName && allErrors.subUserName)
       filtered.subUserName = allErrors.subUserName;
-    }
-    if (touched.phoneNumber && allErrors.phoneNumber) {
+    if (touched.phoneNumber && allErrors.phoneNumber)
       filtered.phoneNumber = allErrors.phoneNumber;
-    }
     return filtered;
-  };
-
-  const getDisplayInstallmentValue = (row: MemberData) => {
-    // 1️⃣ This month's hapto
-    const monthHapto =
-      row.installment === 0 && mandalMonthlyInstallment > 0
-        ? mandalMonthlyInstallment
-        : row.installment || mandalMonthlyInstallment;
-
-    return {
-      value: monthHapto, // ✅ month-specific
-      hasPending: row.pendingInstallment > 0,
-      pendingAmount: row.pendingInstallment,
-    };
   };
 
   const handleAddMember = async () => {
     const validationErrors = validateNewMemberForm(newMemberData);
     setErrors(validationErrors);
     setTouched({ subUserName: true, phoneNumber: true });
+
     if (Object.keys(validationErrors).length > 0) {
       showErrorToast("Please fix the errors in the form");
       return;
     }
+
     try {
       setIsAddingMember(true);
       setIsTableDataLoading(true);
+
       const cleanPhoneNumber = cleanPhoneNumberForPayload(
         newMemberData.phoneNumber
       );
+
       const phoneNumberExists = subUsers.some(
         (user) => user.phoneNumber === cleanPhoneNumber
       );
       if (phoneNumberExists) {
-        showErrorToast(
-          "This phone number is already registered with another member"
-        );
-        setErrors((prev) => ({
-          ...prev,
-          phoneNumber: "Phone number already exists",
-        }));
-        setIsTableDataLoading(false);
+        showErrorToast("This phone number is already registered");
         return;
       }
-      // 1) Create subuser
+
+      const monthId = getSelectedMonthObjectId();
+      if (!monthId) {
+        showErrorToast("Month not found. Please reselect month.");
+        return;
+      }
+
       await createMandalSubUserApi({
         subUserName: newMemberData.subUserName,
         phoneNumber: cleanPhoneNumber,
+        monthId,
       });
+
       showSuccessToast("Member created successfully!");
-      // 2) Refresh subUsers list
+
       const users = await getMandalSubUsersApi();
       setSubUsers(users);
-      // 3) Check if we need to create the first month based on established date
-      let allMonths = await getAllMonthsApi();
-      let validMonths = Array.isArray(allMonths) ? allMonths : [];
-      // If no months exist, create the first month based on established date
-      if (validMonths.length === 0 && establishedDate) {
-        try {
-          const establishedYear = new Date(establishedDate).getFullYear();
-          const establishedMonth = (new Date(establishedDate).getMonth() + 1)
-            .toString()
-            .padStart(2, "0");
-          const firstMonth = `${establishedYear}-${establishedMonth}`;
-          await initializeMonthDataApi(firstMonth);
-          allMonths = await getAllMonthsApi();
-          validMonths = Array.isArray(allMonths) ? allMonths : [];
-          const sortedMonths = [...validMonths].sort((a, b) => {
-            const dateA = new Date(a + "-01");
-            const dateB = new Date(b + "-01");
-            return dateB.getTime() - dateA.getTime();
-          });
-          setMonths(sortedMonths);
-          setSelectedMonth(firstMonth);
-          const updatedData = await getMemberDataApi(firstMonth);
-          setMemberData(updatedData);
-          setFilteredMemberData(updatedData);
-          showSuccessToast(
-            `First month ${firstMonth} created based on mandal's established date`
-          );
-        } catch (monthError) {
-          console.error("Error creating first month:", monthError);
-          showErrorToast("Failed to create initial month");
-        }
-      } else if (validMonths.length > 0) {
-        // FIXED: Only initialize data for the target month, not all months
-        const targetMonth = selectedMonth || validMonths[0];
 
-        try {
-          await initializeMonthDataApi(targetMonth);
-        } catch (err) {
-          console.warn(
-            "initializeMonthDataApi failed for month",
-            targetMonth,
-            err
-          );
-        }
-
-        const updatedData = await getMemberDataApi(targetMonth);
-        setMemberData(updatedData);
-        setFilteredMemberData(updatedData);
-      } else {
-        const fallbackMonth = getCurrentMonth();
-        await initializeMonthDataApi(fallbackMonth);
-        allMonths = await getAllMonthsApi();
-        validMonths = Array.isArray(allMonths) ? allMonths : [];
-        const sortedMonths = [...validMonths].sort((a, b) => {
-          const dateA = new Date(a + "-01");
-          const dateB = new Date(b + "-01");
-          return dateB.getTime() - dateA.getTime();
-        });
-        setMonths(sortedMonths);
-        setSelectedMonth(fallbackMonth);
-        const updatedData = await getMemberDataApi(fallbackMonth);
+      // ✅ ID પાસ કરીને ડેટા refresh કરો
+      const monthIdForRefresh = getSelectedMonthObjectId();
+      if (monthIdForRefresh) {
+        const updatedData = await getMemberDataApi(monthIdForRefresh);
         setMemberData(updatedData);
         setFilteredMemberData(updatedData);
       }
+
       setNewMemberData({ subUserName: "", phoneNumber: "" });
-      setErrors({});
-      setTouched({ subUserName: false, phoneNumber: false });
       setIsAddMemberDialogOpen(false);
-    } catch (error: unknown) {
+    } catch (error) {
       console.error("Error creating member:", error);
-      if (error instanceof AxiosError) {
-        const errorMessage =
-          error.response?.data?.error?.toLowerCase() ||
-          error.response?.data?.message?.toLowerCase();
-        if (
-          errorMessage &&
-          errorMessage.includes("phone") &&
-          errorMessage.includes("already")
-        ) {
-          showErrorToast("Phone number already in use");
-          setErrors((prev) => ({
-            ...prev,
-            phoneNumber: "This phone number is already registered",
-          }));
-        } else if (error.response?.data?.error) {
-          showErrorToast(error.response.data.error);
-        } else {
-          showErrorToast("Failed to create member");
-        }
-      } else {
-        showErrorToast("Failed to create member");
-      }
+      showErrorToast("Failed to create member");
     } finally {
       setIsAddingMember(false);
       setIsTableDataLoading(false);
@@ -502,58 +410,60 @@ export default function AnalyticsPage() {
   };
 
   const handleAddData = async () => {
-    if (!formData.subUserId || !selectedMonth) {
-      showErrorToast("Please select a member and month");
+    if (!formData.subUserId) {
+      showErrorToast("Please select a member");
+      return;
+    }
+
+    const monthId = getSelectedMonthObjectId();
+    if (!monthId) {
+      showErrorToast("Please select a month");
       return;
     }
 
     try {
       setUpdatingMemberId(formData.subUserId);
 
-      const userTypedInstallment = parseInt(formData.installment) || 0;
-      const pendingFromForm = parseInt(formData.pendingInstallment) || 0;
+      const totalPaid = parseFloat(formData.installment) || 0;
 
-      const regularInstallment =
-        mandalMonthlyInstallment > 0 ? mandalMonthlyInstallment : 0;
+      const currentMemberRecord = memberData.find(
+        (item) => item.subUser._id === formData.subUserId
+      );
 
-      const isFullyPaid =
-        userTypedInstallment >= regularInstallment + pendingFromForm;
+      if (!currentMemberRecord) {
+        showErrorToast("Member data not found for update");
+        return;
+      }
 
       const payload = {
-        subUserId: formData.subUserId,
-        month: selectedMonth,
-        installment: userTypedInstallment,
-        amount: parseInt(formData.amount) || 0,
-        interest: parseInt(formData.interest) || 0,
-        fine: parseInt(formData.fine) || 0,
-        withdrawal: parseInt(formData.withdrawal) || 0,
-        newWithdrawal: parseInt(formData.newWithdrawal) || 0,
-        outerCheckbox: isFullyPaid,
-        innerCheckbox: isInstallmentPaid,
-        pendingInstallment: pendingFromForm,
+        _id: currentMemberRecord._id,
+        paidInstallment: totalPaid,
+        paidWithdrawal: parseFloat(formData.paidWithdrawal) || 0,
+        newWithdrawal: parseFloat(formData.newWithdrawal) || 0,
+        fine: parseFloat(formData.fine) || 0,
       };
 
       await createMemberDataApi(payload);
 
       showSuccessToast("Member data updated successfully!");
 
-      const updatedData = await getMemberDataApi(selectedMonth);
+      const updatedData = await getMemberDataApi(monthId);
       setMemberData(updatedData);
       setFilteredMemberData(updatedData);
 
       setFormData({
         subUserId: "",
         installment: "",
-        amount: "",
+        withdrawal: "",
         interest: "",
         fine: "",
-        withdrawal: "",
+        paidWithdrawal: "",
         newWithdrawal: "",
-        outerCheckbox: false,
-        innerCheckbox: false,
         pendingInstallment: "",
+        paidInstallment: "",
+        paidInterest: "",
       });
-      setIsInstallmentPaid(true);
+
       setSelectedMemberName("");
       setIsAddDialogOpen(false);
     } catch (error) {
@@ -564,51 +474,41 @@ export default function AnalyticsPage() {
     }
   };
 
-  const handleHaptoSet = async () => {
-    if (!haptoValue) {
-      showErrorToast("Please enter a value for Hapto");
-      return;
-    }
-    const numValue = parseInt(haptoValue);
-    if (isNaN(numValue) || numValue < 0) {
-      showErrorToast("Please enter a valid positive number");
-      return;
-    }
-    if (!mandalId) {
-      showErrorToast("Mandal not found");
-      return;
-    }
-    if (!selectedMonth) {
-      showErrorToast("Please select a month first");
-      return;
-    }
+  const handleSetHapto = async () => {
     try {
+      const monthId = getSelectedMonthObjectId();
+      if (!monthId) {
+        showErrorToast("Month not found");
+        return;
+      }
+
+      if (!haptoValue || Number(haptoValue) <= 0) {
+        showErrorToast("Please enter valid hapto value");
+        return;
+      }
+
       setIsMonthLoading(true);
 
-      // Check if this is first time set or update
-      // const isUpdate = isHaptoSet && mandalMonthlyInstallment > 0;
+      // 🔥 MAIN API CALL
+      await setNewInstallmentApi(monthId, Number(haptoValue));
 
-      // API call with isUpdate flag
-      const result = await updateMandalInstallmentApi(
-        numValue,
-        selectedMonth,
-        true
-      );
-      // Update state
-      setMandalMonthlyInstallment(numValue);
+      showSuccessToast("Hapto set successfully!");
+
+      // 🔁 Mandal monthly installment update
+      setMandalMonthlyInstallment(Number(haptoValue));
       setIsHaptoSet(true);
-      setHaptoLabelValue(`Hapto: ₹${numValue}`);
-      // Show appropriate success message
 
-      // Refresh member data for current month
-      const updatedData = await getMemberDataApi(selectedMonth);
+      // 🔁 TABLE REFRESH
+      const updatedData = await getMemberDataApi(monthId);
       setMemberData(updatedData);
       setFilteredMemberData(updatedData);
-      setIsHaptoDialogOpen(false);
+
+      // cleanup
       setHaptoValue("");
+      setIsHaptoDialogOpen(false);
     } catch (error) {
-      console.error("Error setting hapto value:", error);
-      showErrorToast("Failed to set hapto value");
+      console.error("Error setting hapto:", error);
+      showErrorToast("Failed to set hapto");
     } finally {
       setIsMonthLoading(false);
     }
@@ -621,7 +521,7 @@ export default function AnalyticsPage() {
       newMonth = `${year}-${month.toString().padStart(2, "0")}`;
     } else if (months.length > 0) {
       const latestMonth = months[0];
-      const [year, month] = latestMonth.split("-").map(Number);
+      const [year, month] = latestMonth.month.split("-").map(Number);
       let nextMonth = month + 1;
       let nextYear = year;
       if (nextMonth > 12) {
@@ -632,51 +532,67 @@ export default function AnalyticsPage() {
     } else {
       newMonth = getCurrentMonth();
     }
-    // Set the new month name in state
+
     setNewMonthName(newMonth);
-    // Open the confirmation dialog
     setIsAddMonthDialogOpen(true);
   };
 
   const confirmAddNewMonth = async () => {
-    if (!newMonthName || !/^\d{4}-\d{2}$/.test(newMonthName)) {
-      showErrorToast("Invalid month format. Expected YYYY-MM");
-      return;
-    }
     try {
       setIsAddingMonth(true);
       setIsTableLoading(true);
-      await initializeMonthDataApi(newMonthName);
-      const allMonths = await getAllMonthsApi();
-      const validMonths = Array.isArray(allMonths) ? allMonths : [];
-      validMonths.sort((a, b) => {
-        const dateA = new Date(a + "-01");
-        const dateB = new Date(b + "-01");
-        return dateB.getTime() - dateA.getTime();
-      });
-      setMonths(validMonths);
-      setSelectedMonth(newMonthName);
-      const data = await getMemberDataApi(newMonthName);
+
+      await addNewMonthApi();
+
+      const monthResponse = await getMonthApi();
+
+      const monthObjects = Array.isArray(monthResponse)
+        ? monthResponse
+            .filter((m) => m && m._id && m.month)
+            .sort((a, b) => {
+              const da = new Date(a.month + "-01");
+              const db = new Date(b.month + "-01");
+              return db.getTime() - da.getTime();
+            })
+        : [];
+
+      if (monthObjects.length === 0) {
+        showErrorToast("Month creation failed");
+        return;
+      }
+
+      const latestMonthName = monthObjects[0].month;
+      setMonths(monthObjects);
+      setSelectedMonth(latestMonthName);
+
+      const latestMonthId = monthObjects[0]._id;
+
+      const data = await getMemberDataApi(latestMonthId);
       setMemberData(data);
       setFilteredMemberData(data);
-      showSuccessToast(
-        `મહિનો ${newMonthName} બનાવાયો! (Installment for this month will use backend's setInstallment)`
-      );
+
+      showSuccessToast(`મહિનો ${latestMonthName} બનાવાયો!`);
       setIsAddMonthDialogOpen(false);
     } catch (error: unknown) {
-      const err = error as {
-        response?: { data?: { message?: string } };
-      };
-      const message = err.response?.data?.message;
-      console.error("Error creating new month:", error);
-      if (message?.includes("Month is required")) {
-        showErrorToast("ત્રુટિ: મહિનો YYYY-MM ફોર્મેટમાં જરૂરી છે");
-      } else if (message) {
-        showErrorToast(`ત્રુટિ: ${message}`);
-      } else {
-        showErrorToast("નવો મહિનો બનાવામાં ત્રુટિ");
-      }
-    } finally {
+  console.error("Error creating new month:", error);
+
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { error?: string } } }).response
+      ?.data?.error === "string"
+  ) {
+    showErrorToast(
+      (error as { response: { data: { error: string } } }).response.data.error
+    );
+  } else if (error instanceof Error) {
+    showErrorToast(error.message);
+  } else {
+    showErrorToast("નવો મહિનો બનાવવામાં ત્રુટિ");
+  }
+}
+finally {
       setIsAddingMonth(false);
       setIsTableLoading(false);
     }
@@ -733,28 +649,18 @@ export default function AnalyticsPage() {
     setFormData({
       subUserId: row.subUser._id,
       installment: totalInstallmentToShow.toString(),
-      amount: row.amount?.toString() ?? "0",
+      withdrawal: row.withdrawal?.toString() ?? "0",
       interest: row.interest?.toString() ?? "0",
       fine: row.fine?.toString() ?? "0",
-      withdrawal: row.withdrawal?.toString() ?? "0",
+      paidWithdrawal: row.paidWithdrawal?.toString() ?? "0",
       newWithdrawal: row.newWithdrawal?.toString() ?? "0",
-      outerCheckbox: row.outerCheckbox ?? false,
-      innerCheckbox: row.innerCheckbox ?? false,
       pendingInstallment: row.pendingInstallment?.toString() ?? "0",
+      paidInstallment: row.paidInstallment?.toString() ?? "0",
+      paidInterest: row.paidInterest?.toString() ?? "0",
     });
 
-    setIsInstallmentPaid(row.innerCheckbox ?? false);
     setSelectedMemberName(row.subUser?.subUserName || "");
     setIsAddDialogOpen(true);
-  };
-
-  const handleInputFocus = (field: keyof Omit<FormData, "subUserId">) => {
-    if (formData[field] === "0") {
-      setFormData({
-        ...formData,
-        [field]: "",
-      });
-    }
   };
 
   const handleInputBlur = (field: keyof Omit<FormData, "subUserId">) => {
@@ -765,6 +671,15 @@ export default function AnalyticsPage() {
       setFormData({
         ...formData,
         [field]: "0",
+      });
+    }
+  };
+
+  const handleInputFocus = (field: keyof Omit<FormData, "subUserId">) => {
+    if (formData[field] === "0") {
+      setFormData({
+        ...formData,
+        [field]: "",
       });
     }
   };
@@ -798,6 +713,7 @@ export default function AnalyticsPage() {
       </div>
     );
   }
+
   return (
     <>
       <div className="sticky top-0 z-40 bg-white">
@@ -817,32 +733,18 @@ export default function AnalyticsPage() {
               <Select value={selectedMonth} onValueChange={setSelectedMonth}>
                 <SelectTrigger className="w-full sm:w-[180px] shrink-0">
                   <Calendar className="h-4 w-4 mr-2" />
-                  {isAddingMonth ? (
-                    <span className="text-gray-400 text-sm">
-                      Loading months...
-                    </span>
-                  ) : (
-                    <SelectValue placeholder="Select month" />
-                  )}
+                  <SelectValue placeholder="Select month" />
                 </SelectTrigger>
-                {!isAddingMonth && (
-                  <SelectContent>
-                    {Array.isArray(months) && months.length > 0 ? (
-                      months.map((month) => (
-                        <SelectItem key={month} value={month}>
-                          {new Date(month + "-01").toLocaleString("default", {
-                            month: "short",
-                            year: "numeric",
-                          })}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="none" disabled>
-                        No months available
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                )}
+                <SelectContent>
+                  {months.map((m) => (
+                    <SelectItem key={m._id} value={m.month}>
+                      {new Date(m.month + "-01").toLocaleString("default", {
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </div>
             <div className="">
@@ -1050,9 +952,9 @@ export default function AnalyticsPage() {
                       <Button
                         variant="default"
                         type="button"
-                        onClick={handleHaptoSet}
                         className="w-full sm:w-auto"
                         disabled={!haptoValue || isMonthLoading}
+                        onClick={handleSetHapto} // ✅ ADD THIS
                       >
                         {isMonthLoading ? (
                           <div className="flex items-center justify-center gap-2">
@@ -1165,19 +1067,19 @@ export default function AnalyticsPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="amount" className="text-sm sm:text-base">
+                <Label htmlFor="withdrawal" className="text-sm sm:text-base">
                   આ નો ઉ. (Amount)
                 </Label>
                 <Input
-                  id="amount"
+                  id="withdrawal"
                   type="number"
-                  value={formData.amount}
+                  value={formData.withdrawal}
                   onChange={(e) =>
-                    setFormData({ ...formData, amount: e.target.value })
+                    setFormData({ ...formData, withdrawal: e.target.value })
                   }
-                  onFocus={() => handleInputFocus("amount")}
-                  onBlur={() => handleInputBlur("amount")}
-                  placeholder="Enter amount"
+                  onFocus={() => handleInputFocus("withdrawal")}
+                  onBlur={() => handleInputBlur("withdrawal")}
+                  placeholder="Enter withdrawal"
                   className="text-base"
                   disabled={updatingMemberId !== null}
                 />
@@ -1219,19 +1121,22 @@ export default function AnalyticsPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="withdrawal" className="text-sm sm:text-base">
+                <Label
+                  htmlFor="paidwithdrawal"
+                  className="text-sm sm:text-base"
+                >
                   ઉપાડ જમા (Withdrawal)
                 </Label>
                 <Input
-                  id="withdrawal"
+                  id="paidwithdrawal"
                   type="number"
-                  value={formData.withdrawal}
+                  value={formData.paidWithdrawal}
                   onChange={(e) =>
-                    setFormData({ ...formData, withdrawal: e.target.value })
+                    setFormData({ ...formData, paidWithdrawal: e.target.value })
                   }
-                  onFocus={() => handleInputFocus("withdrawal")}
-                  onBlur={() => handleInputBlur("withdrawal")}
-                  placeholder="Enter withdrawal"
+                  onFocus={() => handleInputFocus("paidWithdrawal")}
+                  onBlur={() => handleInputBlur("paidWithdrawal")}
+                  placeholder="Enter paidwithdrawal"
                   className="text-base"
                   disabled={updatingMemberId !== null}
                 />
@@ -1252,7 +1157,7 @@ export default function AnalyticsPage() {
                   }
                   onFocus={() => handleInputFocus("newWithdrawal")}
                   onBlur={() => handleInputBlur("newWithdrawal")}
-                  placeholder="Enter new withdrawal"
+                  placeholder="Enter new paidwithdrawal"
                   className="text-base"
                   disabled={updatingMemberId !== null}
                 />
@@ -1264,7 +1169,7 @@ export default function AnalyticsPage() {
                   onCheckedChange={(checked) =>
                     setIsInstallmentPaid(checked as boolean)
                   }
-                 className={`
+                  className={`
       border-2
       ${
         isInstallmentPaid
@@ -1299,14 +1204,16 @@ export default function AnalyticsPage() {
                   setFormData({
                     subUserId: "",
                     installment: "",
-                    amount: "",
+                    withdrawal: "",
                     interest: "",
                     fine: "",
-                    withdrawal: "",
+                    paidWithdrawal: "",
                     newWithdrawal: "",
-                    outerCheckbox: false,
-                    innerCheckbox: false,
+                    // outerCheckbox: false,
+                    // innerCheckbox: false,
                     pendingInstallment: "",
+                    paidInstallment: "",
+                    paidInterest: "",
                   });
                   setIsInstallmentPaid(true);
                   setSelectedMemberName("");
@@ -1572,16 +1479,18 @@ export default function AnalyticsPage() {
                       const carriedForwardAmount =
                         calculateCarriedForwardAmount(row?.subUser?._id);
 
-                      const isChecked = row.outerCheckbox;
+                      const installmentInfo = getDisplayInstallmentValue(row);
+                      const requiredInstallment = installmentInfo.value;
 
-                      const totalInstallmentDisplay =
-                        getDisplayInstallmentValue(row);
+                      const isFullyPaid =
+                        (row.paidInstallment || 0) >= requiredInstallment;
+
                       return (
                         <TableRow key={row._id}>
                           <TableCell className="text-center">
                             <Checkbox
-                              checked={isChecked}
-                              onCheckedChange={() => handleRowAction(row)}
+                              checked={isFullyPaid}
+                              disabled={true}
                               className="border border-gray-600 h-5 w-5 rounded-sm
                                 data-[state=checked]:bg-green-600
                                 data-[state=checked]:border-green-600"
@@ -1603,13 +1512,7 @@ export default function AnalyticsPage() {
 
                                 return (
                                   <div className="flex flex-col items-center">
-                                    <span
-                                      className={`font-medium ${
-                                        row.outerCheckbox
-                                          ? "text-green-600"
-                                          : "text-gray-500"
-                                      }`}
-                                    >
+                                    <span>
                                       ₹{installmentInfo.value.toLocaleString()}
                                     </span>
 
@@ -1631,15 +1534,16 @@ export default function AnalyticsPage() {
                                 <span>
                                   ₹{carriedForwardAmount.toLocaleString()}
                                 </span>
-                                {row.amount > 0 &&
-                                  row.amount !== carriedForwardAmount && (
+                                {row.withdrawal > 0 &&
+                                  row.withdrawal !== carriedForwardAmount && (
                                     <span className="text-[10px] text-gray-500">
-                                      (Updated: ₹{row.amount?.toLocaleString()})
+                                      (Updated: ₹
+                                      {row.withdrawal?.toLocaleString()})
                                     </span>
                                   )}
                               </div>
-                            ) : row.amount > 0 ? (
-                              `₹${row.amount?.toLocaleString()}`
+                            ) : row.withdrawal > 0 ? (
+                              `₹${row.withdrawal?.toLocaleString()}`
                             ) : (
                               "-"
                             )}
@@ -1651,8 +1555,8 @@ export default function AnalyticsPage() {
                             {row?.fine > 0 ? `₹${row?.fine}` : "-"}
                           </TableCell>
                           <TableCell className="text-center text-xs md:text-sm">
-                            {row?.withdrawal > 0
-                              ? `₹${row?.withdrawal.toLocaleString()}`
+                            {row?.paidWithdrawal > 0
+                              ? `₹${row?.paidWithdrawal.toLocaleString()}`
                               : "-"}
                           </TableCell>
                           <TableCell className="text-center text-xs md:text-sm">
@@ -1661,13 +1565,7 @@ export default function AnalyticsPage() {
                               : "-"}
                           </TableCell>
                           <TableCell className="text-center font-medium text-xs md:text-sm">
-                            {isChecked ? (
-                              `₹${(
-                                row.installment + row.interest
-                              ).toLocaleString()}`
-                            ) : (
-                              <span className="text-gray-400">₹0</span>
-                            )}
+                            {(row.installment + row.interest).toLocaleString()}
                           </TableCell>
                           <TableCell className="text-center">
                             <Button
@@ -1778,9 +1676,13 @@ export default function AnalyticsPage() {
               const carriedForwardAmount = calculateCarriedForwardAmount(
                 row?.subUser?._id
               );
-              const isChecked = row.outerCheckbox;
 
-              const totalInstallmentDisplay = getDisplayInstallmentValue(row);
+              const installmentInfo = getDisplayInstallmentValue(row);
+              const requiredInstallment = installmentInfo.value;
+
+              const isFullyPaid =
+                (row.paidInstallment || 0) >= requiredInstallment;
+
               return (
                 <div
                   key={row._id}
@@ -1789,8 +1691,8 @@ export default function AnalyticsPage() {
                   {/* TOP: Checkbox + Name + Index */}
                   <div className="flex items-center justify-between">
                     <Checkbox
-                      checked={row.outerCheckbox}
-                      onCheckedChange={() => handleRowAction(row)}
+                      checked={isFullyPaid}
+                      disabled={true}
                       className="
                   h-4 w-4 border border-gray-600
                   data-[state=checked]:bg-green-600
@@ -1809,103 +1711,103 @@ export default function AnalyticsPage() {
                     <div className="flex flex-col items-end">
                       {(() => {
                         const installmentInfo = getDisplayInstallmentValue(row);
+
                         return (
-                          <>
-                            <span
-                              className={`font-semibold ${
-                                row.outerCheckbox
-                                  ? "text-green-600"
-                                  : "text-gray-500"
-                              }`}
-                            >
+                          <div className="flex flex-col items-center">
+                            <span>
                               ₹{installmentInfo.value.toLocaleString()}
                             </span>
+
                             {installmentInfo.hasPending && (
-                              <span className="text-[9px] text-red-600 font-medium mt-0.5">
+                              <span className="text-[10px] text-red-600 mt-0.5 font-medium">
                                 (empty installment :{" "}
                                 {installmentInfo.pendingAmount})
                               </span>
                             )}
-                            {row.installment === 0 &&
-                              mandalMonthlyInstallment > 0 &&
-                              !installmentInfo.hasPending && (
-                                <span className="text-[8px] text-gray-400 mt-0.5">
-                                  (Default: ₹{mandalMonthlyInstallment})
-                                </span>
-                              )}
-                          </>
+                          </div>
                         );
                       })()}
                     </div>
                   </div>
-                  {/* <div className="text-[10px] text-gray-500 text-right">
-  હપ્તો: ₹{getDisplayInstallmentValue(row)}
-</div> */}
-                  {/* Amount */}
                   <div className="flex justify-between text-[10px]">
                     <span className="text-gray-600">આ.નો ઉ.</span>
                     <span className="font-semibold text-green-700">
-                      {carriedForwardAmount > 0
-                        ? `₹${carriedForwardAmount}`
-                        : row.amount > 0
-                        ? `₹${row.amount}`
-                        : "-"}
+                      {carriedForwardAmount > 0 ? (
+                        <div className="flex flex-col items-center">
+                          {row.withdrawal > 0 &&
+                            row.withdrawal !== carriedForwardAmount && (
+                              <span className="text-[10px] text-gray-500">
+                                (Updated: ₹{row.withdrawal?.toLocaleString()})
+                              </span>
+                            )}
+                        </div>
+                      ) : row.withdrawal > 0 ? (
+                        `₹${row.withdrawal?.toLocaleString()}`
+                      ) : (
+                        "-"
+                      )}
                     </span>
                   </div>
-                  {/* Interest */}
                   <div className="flex justify-between text-[10px]">
                     <span className="text-gray-600">વ્યાજ</span>
                     <span className="font-semibold text-green-700">
-                      {row.interest > 0 ? `₹${row.interest}` : "-"}
+                      {row?.interest > 0 ? `₹${row?.interest}` : "-"}
                     </span>
                   </div>
-                  {/* Fine */}
                   <div className="flex justify-between text-[10px]">
                     <span className="text-gray-600">દંડ</span>
                     <span className="font-semibold text-green-700">
                       {row.fine > 0 ? `₹${row.fine}` : "-"}
                     </span>
                   </div>
-                  {/* Withdrawal */}
                   <div className="flex justify-between text-[10px]">
                     <span className="text-gray-600">ઉપાડ જમા</span>
                     <span className="font-semibold text-green-700">
-                      {row.withdrawal > 0 ? `₹${row.withdrawal}` : "-"}
+                      {row?.paidWithdrawal > 0
+                        ? `₹${row?.paidWithdrawal.toLocaleString()}`
+                        : "-"}
                     </span>
                   </div>
-                  {/* New Withdrawal */}
                   <div className="flex justify-between text-[10px]">
                     <span className="text-gray-600">નવો ઉપાડ</span>
                     <span className="font-semibold text-green-700">
-                      {row.newWithdrawal > 0 ? `₹${row.newWithdrawal}` : "-"}
+                      {row?.newWithdrawal > 0
+                        ? `₹${row?.newWithdrawal.toLocaleString()}`
+                        : "-"}
                     </span>
                   </div>
-                  {/* Total Installment + Interest */}
                   <div className="flex justify-between text-[10px]">
                     <span className="text-gray-600">કુલ (હપ્તો+વ્યાજ)</span>
                     <span className="font-semibold text-green-700">
-                      {isChecked
-                        ? `₹${(
-                            row.installment + row.interest
-                          ).toLocaleString()}`
-                        : "₹0"}
+                      {(row.installment + row.interest).toLocaleString()}
                     </span>
                   </div>
-                  {/* Update Button */}
-                  <button
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => handleRowAction(row)}
-                    className="
-                mt-2 w-full bg-green-700 text-white py-1
-                rounded text-[10px] active:scale-95
-              "
+                    disabled={updatingMemberId === row?.subUser?._id}
+                    className="mt-2 w-full py-1
+                rounded text-[10px] active:scale-95"
                   >
-                    Update
-                  </button>
+                    {updatingMemberId === row?.subUser?._id ? (
+                      <Loader
+                        size="sm"
+                        variant="primary"
+                        type="dots"
+                        className="!gap-0"
+                        show
+                      />
+                    ) : (
+                      "Update"
+                    )}
+                  </Button>
                 </div>
               );
             })
           )}
         </div>
+
         {/* Summary Calculations Section - Mobile Skeleton */}
         {isMonthLoading || isTableDataLoading ? (
           <div className="mt-6">
@@ -2093,12 +1995,15 @@ export default function AnalyticsPage() {
                 align="center"
                 className="z-[9999]"
               >
-                {months.map((month) => (
-                  <SelectItem key={month} value={month}>
-                    {new Date(month + "-01").toLocaleString("default", {
-                      month: "short",
-                      year: "numeric",
-                    })}
+                {months?.map((monthObj) => (
+                  <SelectItem key={monthObj._id} value={monthObj.month}>
+                    {new Date(monthObj.month + "-01").toLocaleString(
+                      "default",
+                      {
+                        month: "short",
+                        year: "numeric",
+                      }
+                    )}
                   </SelectItem>
                 ))}
               </SelectContent>

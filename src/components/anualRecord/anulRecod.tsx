@@ -7,20 +7,21 @@ import {
   getMandals,
   getMandalSubUsersApi,
   getMemberDataApi,
-  getAllMonthsApi,
+  getMonthApi,
   MemberData,
 } from "@/auth/auth";
-import { SkeletonCard } from "@/components/ui/loader";
 import { HiOutlineUserGroup } from "react-icons/hi";
+
+interface Month {
+  _id: string;
+  month: string;
+}
 
 interface Calculations {
   totalInstallments: number;
-  totalAmount: number;
   totalInterest: number;
-  totalFines: number;
   totalWithdrawals: number;
   totalNewWithdrawals: number;
-  grandTotal: number;
   totalMembers: number;
   totalName: number;
   bandSilak: number;
@@ -44,7 +45,7 @@ interface AllMonthsData {
 export default function AnnualRecordPage() {
   const [mandalName, setMandalName] = useState<string>("આઈ શ્રી ખોડિયાર");
   const [allMonthsData, setAllMonthsData] = useState<AllMonthsData[]>([]);
-  const [months, setMonths] = useState<string[]>([]);
+  const [months, setMonths] = useState<Month[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [uniqueMembers, setUniqueMembers] = useState<SubUser[]>([]);
 
@@ -58,38 +59,32 @@ export default function AnnualRecordPage() {
           setMandalName(mandals[0].nameGu);
           const currentMandalId = mandals[0]._id;
 
-          const [users, allMonths] = await Promise.all([
+          const [users, monthList] = await Promise.all([
             getMandalSubUsersApi(),
-            getAllMonthsApi(),
+            getMonthApi(), 
           ]);
 
           const filteredUsers = users.filter(
             (user: SubUser) => user.mandal === currentMandalId
           );
           setUniqueMembers(filteredUsers);
+          setMonths(monthList);
 
-          if (Array.isArray(allMonths) && allMonths.length > 0) {
-            setMonths(allMonths);
-            
-            // Fetch data for ALL months
-            const allMonthData: AllMonthsData[] = [];
-            
-            for (const month of allMonths) {
-              try {
-                const data: MemberData[] = await getMemberDataApi(month);
-                allMonthData.push({
-                  month,
-                  data
-                });
-              } catch (error) {
-                console.error(`Error fetching data for ${month}:`, error);
-              }
+          const allMonthData: AllMonthsData[] = [];
+          
+          for (const monthObj of monthList) {
+            try {
+              const data: MemberData[] = await getMemberDataApi(monthObj._id);
+              allMonthData.push({
+                month: monthObj.month,
+                data
+              });
+            } catch (error) {
+              console.error(`Error fetching data for ${monthObj.month}:`, error);
             }
-            
-            setAllMonthsData(allMonthData);
-          } else {
-            setMonths([]);
           }
+          
+          setAllMonthsData(allMonthData);
         }
       } catch (error) {
         console.error("Error fetching initial data:", error);
@@ -102,102 +97,97 @@ export default function AnnualRecordPage() {
     fetchAllData();
   }, []);
 
- // Calculate ANNUAL totals from ALL months data — respecting outerCheckbox
-const calculations = useMemo(() => {
-  // Combine all data from all months
-  const allData = allMonthsData.flatMap(month => month.data);
+  const calculations = useMemo(() => {
+    const allData = allMonthsData.flatMap(month => month.data);
 
-  // Get unique members across all months
-  const uniqueMemberIds = new Set(
-    allData.map(row => row.subUser?._id).filter(Boolean)
-  );
+    const uniqueMemberIds = new Set(
+      allData.map(row => row.subUser?._id).filter(Boolean)
+    );
 
-  // Total Installments: ONLY count if outerCheckbox === true
-  const totalInstallments = allData.reduce((sum, row) => {
-    if (!row.outerCheckbox) return sum;
-    return sum + (row.installment || 0);
-  }, 0);
+    const totalInstallments = allData.reduce(
+      (sum, row) => sum + (row.paidInstallment || 0),
+      0
+    );
 
-  const totalAmount = allData.reduce((sum, row) => sum + (row.amount || 0), 0);
-  const totalInterest = allData.reduce(
-    (sum, row) => sum + (row.interest || 0),
-    0
-  );
-  const totalFines = allData.reduce((sum, row) => sum + (row.fine || 0), 0);
-  const totalWithdrawals = allData.reduce(
-    (sum, row) => sum + (row.withdrawal || 0),
-    0
-  );
-  const totalNewWithdrawals = allData.reduce(
-    (sum, row) => sum + (row.newWithdrawal || 0),
-    0
-  );
+    const totalInterest = allData.reduce(
+      (sum, row) => sum + (row.paidInterest || 0),
+      0
+    );
 
-  const totalMembers = uniqueMemberIds.size;
+    const totalWithdrawals = allData.reduce(
+      (sum, row) => sum + (row.paidWithdrawal || 0),
+      0
+    );
 
-  // totalName = installments (only paid ones) + interest + withdrawals
-  const totalName = allData.reduce((sum, row) => {
-    let installmentPart = 0;
-    if (row.outerCheckbox) {
-      installmentPart = row.installment || 0;
-    }
-    return sum + installmentPart + (row.interest || 0) + (row.withdrawal || 0);
-  }, 0);
+    const totalNewWithdrawals = allData.reduce(
+      (sum, row) => sum + (row.newWithdrawal || 0),
+      0
+    );
 
-  const bandSilak = totalName - totalNewWithdrawals;
-  const Mandalcash = bandSilak; // as per your existing logic
+    const totalMembers = uniqueMemberIds.size;
 
-  const interestPerPerson =
-    totalMembers > 0 ? totalInterest / totalMembers : 0;
-  const perPerson = totalMembers > 0 ? bandSilak / totalMembers : 0;
+    const totalName = totalInstallments  + totalWithdrawals;
 
-  return {
-    totalInstallments,
-    totalAmount,
-    totalInterest,
-    totalFines,
-    totalWithdrawals,
-    totalNewWithdrawals,
-    grandTotal: 0,
-    totalMembers,
-    totalName,
-    bandSilak,
-    Mandalcash,
-    interestPerPerson,
-    perPerson,
-  };
-}, [allMonthsData]);
+    const bandSilak = totalName - totalNewWithdrawals;
+    const Mandalcash = bandSilak;
 
-const monthlySummaries = useMemo(() => {
-  return allMonthsData.map(monthData => {
-    const monthInstallments = monthData.data.reduce((sum, row) => {
-      if (!row.outerCheckbox) return sum;
-      return sum + (row.installment || 0);
-    }, 0);
-
-    const monthInterest = monthData.data.reduce((sum, row) => sum + (row.interest || 0), 0);
-    const monthWithdrawals = monthData.data.reduce((sum, row) => sum + (row.withdrawal || 0), 0);
-    const monthNewWithdrawals = monthData.data.reduce((sum, row) => sum + (row.newWithdrawal || 0), 0);
-    const monthFines = monthData.data.reduce((sum, row) => sum + (row.fine || 0), 0);
-
-    const monthTotalName = monthInstallments + monthInterest + monthWithdrawals;
-    const monthBandSilak = monthTotalName - monthNewWithdrawals;
+    const interestPerPerson =
+      totalMembers > 0 ? totalInterest / totalMembers : 0;
+    const perPerson = totalMembers > 0 ? bandSilak / totalMembers : 0;
 
     return {
-      month: monthData.month,
-      installments: monthInstallments,
-      interest: monthInterest,
-      withdrawals: monthWithdrawals,
-      newWithdrawals: monthNewWithdrawals,
-      fines: monthFines,
-      totalName: monthTotalName,
-      bandSilak: monthBandSilak
+      totalInstallments,
+      totalInterest,
+      totalWithdrawals,
+      totalNewWithdrawals,
+      totalMembers,
+      totalName,
+      bandSilak,
+      Mandalcash,
+      interestPerPerson,
+      perPerson,
     };
-  });
-}, [allMonthsData]);
-  // Calculate possible vs actual installments
+  }, [allMonthsData]);
+
+  const monthlySummaries = useMemo(() => {
+    return allMonthsData.map(monthData => {
+      const monthInstallments = monthData.data.reduce(
+        (sum, row) => sum + (row.paidInstallment || 0),
+        0
+      );
+
+      const monthInterest = monthData.data.reduce(
+        (sum, row) => sum + (row.paidInterest || 0),
+        0
+      );
+
+      const monthWithdrawals = monthData.data.reduce(
+        (sum, row) => sum + (row.paidWithdrawal || 0),
+        0
+      );
+
+      const monthNewWithdrawals = monthData.data.reduce(
+        (sum, row) => sum + (row.newWithdrawal || 0),
+        0
+      );
+
+      const monthTotalName = monthInstallments + monthInterest + monthWithdrawals;
+      const monthBandSilak = monthTotalName - monthNewWithdrawals;
+
+      return {
+        month: monthData.month,
+        installments: monthInstallments,
+        interest: monthInterest,
+        withdrawals: monthWithdrawals,
+        newWithdrawals: monthNewWithdrawals,
+        totalName: monthTotalName,
+        bandSilak: monthBandSilak
+      };
+    });
+  }, [allMonthsData]);
+
+  
   const installmentAnalysis = useMemo(() => {
-    // Assuming monthly installment is 1000 (you can get this from mandal data)
     const monthlyInstallmentAmount = 1000;
     const totalPossibleInstallments = uniqueMembers.length * months.length * monthlyInstallmentAmount;
     const totalActualInstallments = calculations.totalInstallments;
@@ -218,119 +208,119 @@ const monthlySummaries = useMemo(() => {
   }, [calculations.totalInstallments, months.length, uniqueMembers.length]);
 
   if (isLoading) {
-  return (
-    <div className="space-y-6 md:space-y-8 p-4 md:p-6">
-      {/* Header Skeleton */}
-      <div className="space-y-3">
-        <div className="h-8 w-64 md:w-80 bg-gray-200 rounded animate-pulse" />
-        <div className="h-4 w-72 md:w-96 bg-gray-200 rounded animate-pulse" />
-      </div>
-
-      {/* Stats Cards Skeleton */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="bg-white rounded-lg border border-gray-200 p-5">
-            <div className="flex justify-between items-start mb-4">
-              <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
-              <div className="h-4 w-4 bg-gray-200 rounded-full animate-pulse" />
-            </div>
-            <div className="h-8 w-20 bg-gray-200 rounded animate-pulse mb-2" />
-            <div className="h-3 w-32 bg-gray-200 rounded animate-pulse" />
-          </div>
-        ))}
-      </div>
-
-      {/* Installment Analysis Skeleton */}
-      <div className="bg-white rounded-lg border border-gray-200 p-5">
-        <div className="space-y-3 mb-6">
-          <div className="h-6 w-48 bg-gray-200 rounded animate-pulse" />
-          <div className="h-4 w-64 bg-gray-200 rounded animate-pulse" />
+    return (
+      <div className="space-y-6 md:space-y-8 p-4 md:p-6">
+        {/* Header Skeleton */}
+        <div className="space-y-3">
+          <div className="h-8 w-64 md:w-80 bg-gray-200 rounded animate-pulse" />
+          <div className="h-4 w-72 md:w-96 bg-gray-200 rounded animate-pulse" />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="space-y-3">
-              <div className="h-4 w-36 bg-gray-200 rounded animate-pulse" />
-              <div className="h-8 w-32 bg-gray-200 rounded animate-pulse" />
-              <div className="h-3 w-48 bg-gray-200 rounded animate-pulse" />
+
+        {/* Stats Cards Skeleton */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-lg border border-gray-200 p-5">
+              <div className="flex justify-between items-start mb-4">
+                <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
+                <div className="h-4 w-4 bg-gray-200 rounded-full animate-pulse" />
+              </div>
+              <div className="h-8 w-20 bg-gray-200 rounded animate-pulse mb-2" />
+              <div className="h-3 w-32 bg-gray-200 rounded animate-pulse" />
             </div>
           ))}
         </div>
-      </div>
 
-      {/* Monthly Breakdown Table Skeleton */}
-      <div className="bg-white rounded-lg border border-gray-200 p-5">
-        <div className="space-y-3 mb-6">
-          <div className="h-6 w-48 bg-gray-200 rounded animate-pulse" />
-          <div className="h-4 w-64 bg-gray-200 rounded animate-pulse" />
-        </div>
-        <div className="space-y-4">
-          {/* Table Header */}
-          <div className="grid grid-cols-5 gap-4">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-4 bg-gray-200 rounded animate-pulse" />
-            ))}
+        {/* Installment Analysis Skeleton */}
+        <div className="bg-white rounded-lg border border-gray-200 p-5">
+          <div className="space-y-3 mb-6">
+            <div className="h-6 w-48 bg-gray-200 rounded animate-pulse" />
+            <div className="h-4 w-64 bg-gray-200 rounded animate-pulse" />
           </div>
-          {/* Table Rows */}
-          {Array.from({ length: 5 }).map((_, rowIndex) => (
-            <div key={rowIndex} className="grid grid-cols-5 gap-4 py-4 border-b">
-              {Array.from({ length: 5 }).map((_, colIndex) => (
-                <div key={colIndex} className={`h-4 bg-gray-200 rounded animate-pulse ${colIndex === 0 ? 'w-24' : 'w-16'}`} />
-              ))}
-            </div>
-          ))}
-          {/* Total Row */}
-          <div className="grid grid-cols-5 gap-4 py-4 bg-gray-50 rounded">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-4 bg-gray-200 rounded animate-pulse" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="space-y-3">
+                <div className="h-4 w-36 bg-gray-200 rounded animate-pulse" />
+                <div className="h-8 w-32 bg-gray-200 rounded animate-pulse" />
+                <div className="h-3 w-48 bg-gray-200 rounded animate-pulse" />
+              </div>
             ))}
           </div>
         </div>
-      </div>
 
-      {/* Detailed Breakdown Skeleton */}
-      <div className="bg-white rounded-lg border border-gray-200 p-5">
-        <div className="space-y-3 mb-6">
-          <div className="h-6 w-64 bg-gray-200 rounded animate-pulse" />
-          <div className="h-4 w-72 bg-gray-200 rounded animate-pulse" />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-          {Array.from({ length: 2 }).map((_, colIndex) => (
-            <div key={colIndex} className="space-y-4">
-              {Array.from({ length: 5 }).map((_, rowIndex) => (
-                <div key={rowIndex} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
-                  <div className="h-4 w-20 bg-gray-200 rounded animate-pulse" />
-                </div>
+        {/* Monthly Breakdown Table Skeleton */}
+        <div className="bg-white rounded-lg border border-gray-200 p-5">
+          <div className="space-y-3 mb-6">
+            <div className="h-6 w-48 bg-gray-200 rounded animate-pulse" />
+            <div className="h-4 w-64 bg-gray-200 rounded animate-pulse" />
+          </div>
+          <div className="space-y-4">
+            {/* Table Header */}
+            <div className="grid grid-cols-5 gap-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="h-4 bg-gray-200 rounded animate-pulse" />
               ))}
             </div>
-          ))}
-        </div>
-        <div className="space-y-4 mt-6">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="flex justify-between items-center p-3 bg-gray-100 rounded-lg">
-              <div className="h-4 w-40 bg-gray-200 rounded animate-pulse" />
-              <div className="h-6 w-24 bg-gray-200 rounded animate-pulse" />
+            {/* Table Rows */}
+            {Array.from({ length: 5 }).map((_, rowIndex) => (
+              <div key={rowIndex} className="grid grid-cols-5 gap-4 py-4 border-b">
+                {Array.from({ length: 5 }).map((_, colIndex) => (
+                  <div key={colIndex} className={`h-4 bg-gray-200 rounded animate-pulse ${colIndex === 0 ? 'w-24' : 'w-16'}`} />
+                ))}
+              </div>
+            ))}
+            {/* Total Row */}
+            <div className="grid grid-cols-5 gap-4 py-4 bg-gray-50 rounded">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="h-4 bg-gray-200 rounded animate-pulse" />
+              ))}
             </div>
-          ))}
+          </div>
         </div>
-      </div>
 
-      {/* Annual Performance Overview Skeleton */}
-      <div className="bg-white rounded-lg border border-gray-200 p-5">
-        <div className="h-6 w-48 bg-gray-200 rounded animate-pulse mb-6" />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="p-4 bg-gray-50 rounded-lg space-y-3">
-              <div className="h-4 w-36 bg-gray-200 rounded animate-pulse" />
-              <div className="h-8 w-28 bg-gray-200 rounded animate-pulse" />
-              <div className="h-3 w-40 bg-gray-200 rounded animate-pulse" />
-            </div>
-          ))}
+        {/* Detailed Breakdown Skeleton */}
+        <div className="bg-white rounded-lg border border-gray-200 p-5">
+          <div className="space-y-3 mb-6">
+            <div className="h-6 w-64 bg-gray-200 rounded animate-pulse" />
+            <div className="h-4 w-72 bg-gray-200 rounded animate-pulse" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+            {Array.from({ length: 2 }).map((_, colIndex) => (
+              <div key={colIndex} className="space-y-4">
+                {Array.from({ length: 5 }).map((_, rowIndex) => (
+                  <div key={rowIndex} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
+                    <div className="h-4 w-20 bg-gray-200 rounded animate-pulse" />
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className="space-y-4 mt-6">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex justify-between items-center p-3 bg-gray-100 rounded-lg">
+                <div className="h-4 w-40 bg-gray-200 rounded animate-pulse" />
+                <div className="h-6 w-24 bg-gray-200 rounded animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Annual Performance Overview Skeleton */}
+        <div className="bg-white rounded-lg border border-gray-200 p-5">
+          <div className="h-6 w-48 bg-gray-200 rounded animate-pulse mb-6" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="p-4 bg-gray-50 rounded-lg space-y-3">
+                <div className="h-4 w-36 bg-gray-200 rounded animate-pulse" />
+                <div className="h-8 w-28 bg-gray-200 rounded animate-pulse" />
+                <div className="h-3 w-40 bg-gray-200 rounded animate-pulse" />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
   return (
     <>
@@ -596,14 +586,14 @@ const monthlySummaries = useMemo(() => {
                   ₹{calculations.bandSilak.toLocaleString()}
                 </span>
               </div>
-              <div className="flex justify-between items-center p-3 bg-blue-100 rounded-lg border-2 border-blue-200">
+              {/* <div className="flex justify-between items-center p-3 bg-blue-100 rounded-lg border-2 border-blue-200">
                 <span className="font-bold text-blue-800 text-sm md:text-base">
                   Grand Total ( કુલ ધીરાણા ):
                 </span>
                 <span className="font-bold text-lg md:text-xl text-blue-800">
-                  ₹ {calculations.grandTotal.toLocaleString()}
+                  ₹ {calculations.grandTotal?.toLocaleString()}
                 </span>
-              </div>
+              </div> */}
             </div>
           </div>
           <div className="flex justify-between items-center p-3 bg-red-100 rounded-lg border-2 border-red-200 mt-4 md:mt-6">

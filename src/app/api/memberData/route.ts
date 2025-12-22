@@ -1,4 +1,5 @@
-import { createMemberData, getAllMonths, getMemberData } from "@/controllers/memberData.controller";
+import { getMonth } from "@/controllers/mandal_month.controller";
+import { createMemberData, getMemberData  } from "@/controllers/memberData.controller";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -8,8 +9,8 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   if (searchParams.has("allMonths")) {
-    return await getAllMonths(request);
-  } else if (searchParams.has("month")) {
+    return await getMonth(request);
+  } else if (searchParams.has("monthId")) {
     return await getMemberData(request);
   } else {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });

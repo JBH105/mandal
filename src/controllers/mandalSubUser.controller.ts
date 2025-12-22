@@ -4,13 +4,18 @@ import MandalSubUser from "@/model/MandalSubUser";
 import Mandal from "@/model/Mandal";
 import { NextResponse } from "next/server";
 import { validateMandalSubUserCreation } from "@/utils/validation";
-import { authMiddleware, AuthenticatedRequest } from "@/middleware/authMiddleware";
+import {
+  authMiddleware,
+  AuthenticatedRequest,
+} from "@/middleware/authMiddleware";
+import MemberData from "@/model/MemberData";
 
 // Create Sub-user
+
 export async function createMandalSubUser(request: AuthenticatedRequest) {
   try {
     // Apply auth middleware (mandal role required)
-    const authResult = await authMiddleware(request, 'mandal');
+    const authResult = await authMiddleware(request, "mandal");
     if (authResult) return authResult;
 
     await connectToDB();
@@ -25,9 +30,14 @@ export async function createMandalSubUser(request: AuthenticatedRequest) {
     // Validate input
     const { subUserName, phoneNumber } = validateMandalSubUserCreation(body);
 
+    const { monthId } = body;
+
     const existingSubUser = await MandalSubUser.findOne({ phoneNumber });
     if (existingSubUser) {
-      return NextResponse.json({ error: "Phone number already in use" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Phone number already in use" },
+        { status: 400 }
+      );
     }
 
     const subUser = new MandalSubUser({
@@ -38,10 +48,23 @@ export async function createMandalSubUser(request: AuthenticatedRequest) {
 
     await subUser.save();
 
-    return NextResponse.json({ message: "Sub-user created successfully" }, { status: 201 });
+    const dataBody = {
+      mandal: mandal._id,
+      monthId,
+      subUser: subUser._id,
+    };
+     const data= await MemberData.create(dataBody);
+    
+    return NextResponse.json(
+      { message: "Sub-user created successfully" ,data},
+      { status: 201 }
+    );
   } catch (error: unknown) {
     console.error("Error creating sub-user:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
 
@@ -58,12 +81,12 @@ export async function getMandalSubUsers(request: AuthenticatedRequest) {
 
     let subUsers;
 
-    if (decoded?.role === 'mandal') {
+    if (decoded?.role === "mandal") {
       // Mandal user → only their sub-users
       subUsers = await MandalSubUser.find({ mandal: decoded.id });
-    } else if (decoded?.role === 'admin') {
+    } else if (decoded?.role === "admin") {
       // Admin → get ALL sub-users across all mandals
-      subUsers = await MandalSubUser.find().populate("mandal"); 
+      subUsers = await MandalSubUser.find().populate("mandal");
       // (populate ensures mandal info is there for frontend matching)
     } else {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -72,6 +95,9 @@ export async function getMandalSubUsers(request: AuthenticatedRequest) {
     return NextResponse.json(subUsers, { status: 200 });
   } catch (error: unknown) {
     console.error("Error fetching sub-users:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
