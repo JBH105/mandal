@@ -12,6 +12,107 @@ import {
   authMiddleware,
   AuthenticatedRequest,
 } from "@/middleware/authMiddleware";
+import MandalMonth from "@/model/MandalMonth";
+
+// export async function createMemberData(request: AuthenticatedRequest) {
+//   try {
+//     const authResult = await authMiddleware(request, "mandal");
+//     if (authResult) return authResult;
+
+//     await connectToDB();
+
+//     const { decoded } = request;
+//     const mandal = await Mandal.findById(decoded?.id);
+//     if (!mandal)
+//       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+//     const body = await request.json();
+//     const {
+//       _id,
+//       paidInstallment,   
+//       paidWithdrawal,
+//       newWithdrawal,
+//       fine,
+//     } = body;
+
+//     const current = await MemberData.findById(_id);
+//     if (!current)
+//       return NextResponse.json(
+//         { error: "Current month not found" },
+//         { status: 400 }
+//       );
+
+//     let remaining = paidInstallment;
+
+//     const installment = current.installment || 0;
+//     const pending = current.pendingInstallment || 0; 
+//     const interest = current.interest || 0;
+
+//     const paidCurrentInstallment = Math.min(remaining, installment);
+//     remaining -= paidCurrentInstallment;
+
+   
+//     const paidInterest = Math.min(remaining, interest);
+//     remaining -= paidInterest;
+
+//     const unpaidInterest = interest - paidInterest; 
+
+   
+//     const effectivePending = Math.max(0, pending - interest);
+
+//     const paidPending = Math.min(remaining, effectivePending);
+//     remaining -= paidPending;
+
+//     const basePending = Math.max(0, effectivePending - paidPending);
+
+ 
+//     const finalPendingInstallment = basePending + unpaidInterest;
+
+//     if (finalPendingInstallment < 0) {
+//       throw new Error("Invalid pending calculation");
+//     }
+
+    
+//     current.paidInstallment = paidInstallment; 
+//     current.paidInterest = paidInterest;
+
+//     current.pendingInstallment = finalPendingInstallment;
+
+//     current.interest = 0;
+
+//     current.fine = fine || 0;
+//     current.newWithdrawal = newWithdrawal || 0;
+//     current.paidWithdrawal = paidWithdrawal || 0;
+
+//     await current.save();
+
+//     return NextResponse.json(
+//       {
+//         message: "Member data saved successfully",
+//         data: {
+//           paidInstallment,
+//           paidInterest,
+//           pendingInstallment: finalPendingInstallment,
+//         },
+//       },
+//       { status: 200 }
+//     );
+// } catch (error: unknown) {
+//   console.error(error);
+
+//   if (error instanceof Error) {
+//     return NextResponse.json(
+//       { error: error.message },
+//       { status: 500 }
+//     );
+//   }
+
+//   return NextResponse.json(
+//     { error: "Server error" },
+//     { status: 500 }
+//   );
+// }
+// }
 
 export async function createMemberData(request: AuthenticatedRequest) {
   try {
@@ -22,66 +123,93 @@ export async function createMemberData(request: AuthenticatedRequest) {
 
     const { decoded } = request;
     const mandal = await Mandal.findById(decoded?.id);
-    if (!mandal)
+    if (!mandal) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const body = await request.json();
     const {
       _id,
-      paidInstallment,   
-      paidWithdrawal,
-      newWithdrawal,
-      fine,
+      paidInstallment = 0,
+      paidInterest = 0,
+      paidWithdrawal = 0,
+      newWithdrawal = 0,
+      fine = 0,
     } = body;
 
     const current = await MemberData.findById(_id);
-    if (!current)
+    if (!current) {
       return NextResponse.json(
         { error: "Current month not found" },
         { status: 400 }
       );
-
-    let remaining = paidInstallment;
-
-    const installment = current.installment || 0;
-    const pending = current.pendingInstallment || 0; 
-    const interest = current.interest || 0;
-
-    const paidCurrentInstallment = Math.min(remaining, installment);
-    remaining -= paidCurrentInstallment;
-
-   
-    const paidInterest = Math.min(remaining, interest);
-    remaining -= paidInterest;
-
-    const unpaidInterest = interest - paidInterest; 
-
-   
-    const effectivePending = Math.max(0, pending - interest);
-
-    const paidPending = Math.min(remaining, effectivePending);
-    remaining -= paidPending;
-
-    const basePending = Math.max(0, effectivePending - paidPending);
-
- 
-    const finalPendingInstallment = basePending + unpaidInterest;
-
-    if (finalPendingInstallment < 0) {
-      throw new Error("Invalid pending calculation");
     }
 
-    
-    current.paidInstallment = paidInstallment; 
-    current.paidInterest = paidInterest;
+    const isFirstTimePayment =
+      (current.paidInstallment || 0) === 0 &&
+      (current.paidInterest || 0) === 0;
 
-    current.pendingInstallment = finalPendingInstallment;
+   
+    if (isFirstTimePayment) {
 
-    current.interest = 0;
+      const currentInstallment = current.installment || 0;
+      const currentPendingInstallment = current.pendingInstallment || 0;
+      const paidInstallmentNumber = Number(paidInstallment) || 0;
 
-    current.fine = fine || 0;
-    current.newWithdrawal = newWithdrawal || 0;
-    current.paidWithdrawal = paidWithdrawal || 0;
+      if (paidInstallmentNumber > 0) {
+        if (paidInstallmentNumber >= currentInstallment) {
+          current.installment = 0;
+
+          const extraPaid =
+            paidInstallmentNumber - currentInstallment;
+
+          current.pendingInstallment = Math.max(
+            0,
+            currentPendingInstallment - extraPaid
+          );
+
+          current.paidInstallment = paidInstallmentNumber;
+        } else {
+          current.installment =
+            currentInstallment - paidInstallmentNumber;
+
+          current.pendingInstallment = currentPendingInstallment;
+          current.paidInstallment = paidInstallmentNumber;
+        }
+      }
+
+
+      const currentInterest = current.interest || 0;
+      const currentPendingInterest = current.pendingInterest || 0;
+      const paidInterestNumber = Number(paidInterest) || 0;
+
+      if (paidInterestNumber > 0) {
+        if (paidInterestNumber >= currentInterest) {
+          current.interest = 0;
+
+          const extraInterestPaid =
+            paidInterestNumber - currentInterest;
+
+          current.pendingInterest = Math.max(
+            0,
+            currentPendingInterest - extraInterestPaid
+          );
+
+          current.paidInterest = paidInterestNumber;
+        } else {
+          current.interest =
+            currentInterest - paidInterestNumber;
+
+          current.pendingInterest = currentPendingInterest;
+          current.paidInterest = paidInterestNumber;
+        }
+      }
+    }
+
+
+    current.paidWithdrawal = Number(paidWithdrawal) || 0;
+    current.newWithdrawal = Number(newWithdrawal) || 0;
+    current.fine = Number(fine) || 0;
 
     await current.save();
 
@@ -89,29 +217,35 @@ export async function createMemberData(request: AuthenticatedRequest) {
       {
         message: "Member data saved successfully",
         data: {
-          paidInstallment,
-          paidInterest,
-          pendingInstallment: finalPendingInstallment,
+          installment: current.installment,
+          pendingInstallment: current.pendingInstallment,
+          paidInstallment: current.paidInstallment,
+
+          interest: current.interest,
+          pendingInterest: current.pendingInterest,
+          paidInterest: current.paidInterest,
         },
       },
       { status: 200 }
     );
-} catch (error: unknown) {
-  console.error(error);
+  } catch (error: unknown) {
+    console.error(error);
 
-  if (error instanceof Error) {
+    if (error instanceof Error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(
-      { error: error.message },
+      { error: "Server error" },
       { status: 500 }
     );
   }
+}
 
-  return NextResponse.json(
-    { error: "Server error" },
-    { status: 500 }
-  );
-}
-}
+
 
 export async function getMemberData(request: AuthenticatedRequest) {
   try {
@@ -144,171 +278,102 @@ export async function getMemberData(request: AuthenticatedRequest) {
   }
 }
 
-export async function setNewInstallment(request: AuthenticatedRequest) {
-  try {
-    await connectToDB();
-    const body = await request.json();
-    const authResult = await authMiddleware(request, "mandal");
-    if (authResult) return authResult;
-
-    const { decoded } = request;
-
-    const mandal = await Mandal.findById(decoded?.id);
-    const { monthId, installment } = body;
-
-    const memberData = await MemberData.updateMany(
-      {
-        mandal: mandal._id,
-        monthId,
-      },
-      {
-        installment,
-      }
-    );
-    return NextResponse.json(
-      { message: "Month data initialized successfully", memberData },
-      { status: 201 }
-    );
-  } catch (error) {
-    console.log("🚀 ~ initializeMonthData ~ error:", error);
-    return NextResponse.json({ error }, { status: 500 });
-  }
-}
-
-// export async function initializeMonthData(request: AuthenticatedRequest) {
+// export async function setNewInstallment(request: AuthenticatedRequest) {
 //   try {
+//     await connectToDB();
+//     const body = await request.json();
 //     const authResult = await authMiddleware(request, "mandal");
 //     if (authResult) return authResult;
 
-//     await connectToDB();
 //     const { decoded } = request;
 
 //     const mandal = await Mandal.findById(decoded?.id);
-//     if (!mandal)
-//       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+//     const { monthId, installment } = body;
 
-//     const body = await request.json();
-//     const { month } = validateMonthInitialization(body);
-
-//     const subUsers = await MandalSubUser.find({ mandal: mandal._id });
-
-//     const allPreviousMonthsData = await MemberData.find({
-//       mandal: mandal._id,
-//       month: { $lt: month },
-//     }).lean();
-
-//     const installment = mandal.setInstallment || 0;
-
-//     const memberDataPromises = subUsers.map(async (subUser) => {
-//       const subUserId = subUser._id.toString();
-
-//       const existingData = await MemberData.findOne({
+//     const memberData = await MemberData.updateMany(
+//       {
 //         mandal: mandal._id,
-//         subUser: subUser._id,
-//         month,
-//       });
-//       if (existingData) return existingData;
-
-//       let totalPendingInstallment = 0;
-//       const  totalPaidInstallment = 0;
-//       let carriedForwardAmount = 0;
-
-//       const userPreviousRecords = allPreviousMonthsData
-//         .filter((d) => d.subUser.toString() === subUserId)
-//         .sort((a, b) => a.month.localeCompare(b.month));
-
-//       for (let i = userPreviousRecords.length - 1; i >= 0; i--) {
-//         const prev = userPreviousRecords[i];
-
-//         const paid = prev.paidInstallment || 0;
-//         const expected = installment;
-
-//         if (paid < expected) {
-//           totalPendingInstallment += expected - paid;
-//         } else {
-//           break;
-//         }
-
-//         const balance =
-//           (prev.amount || 0) +
-//           (prev.newWithdrawal || 0) -
-//           (prev.withdrawal || 0);
-
-//         if (balance > 0) {
-//           carriedForwardAmount += balance;
-//         }
+//         monthId,
+//       },
+//       {
+//         installment,
 //       }
-
-//       const amount = carriedForwardAmount > 0 ? carriedForwardAmount : 0;
-
-//       const newMonthInstallment = totalPendingInstallment > 0 ? 0 : installment;
-
-//       const newData = {
-//         mandal: mandal._id,
-//         subUser: subUser._id,
-//         month,
-//         installment: newMonthInstallment,
-//         amount,
-//         interest: 0,
-//         fine: 0,
-//         withdrawal: 0,
-//         newWithdrawal: 0,
-//         total: newMonthInstallment,
-//         pendingInstallment: totalPendingInstallment,
-//         paidInstallment: totalPaidInstallment,
-//       };
-
-//       const saved = new MemberData(newData);
-//       await saved.save();
-//       return saved;
-//     });
-
-//     const memberData = await Promise.all(memberDataPromises);
-
+//     );
 //     return NextResponse.json(
 //       { message: "Month data initialized successfully", memberData },
 //       { status: 201 }
 //     );
 //   } catch (error) {
 //     console.log("🚀 ~ initializeMonthData ~ error:", error);
-//     return NextResponse.json(
-//       { error: "Internal server error" },
-//       { status: 500 }
-//     );
+//     return NextResponse.json({ error }, { status: 500 });
 //   }
 // }
 
-// export async function getAllMonths(request: AuthenticatedRequest) {
-//   try {
-//     const authResult = await authMiddleware(request, "mandal");
-//     if (authResult) return authResult;
+export async function setNewInstallment(request: AuthenticatedRequest) {
+  try {
+    const authResult = await authMiddleware(request, "mandal");
+    if (authResult) return authResult;
 
-//     await connectToDB();
+    await connectToDB();
 
-//     const { decoded } = request;
-//     const mandal = await Mandal.findById(decoded?.id);
-//     if (!mandal) {
-//       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-//     }
+    const body = await request.json();
+    const { monthId, installment } = body;
 
-//     let months = await MemberData.distinct("month", { mandal: mandal._id });
+    if (!monthId) {
+      return NextResponse.json(
+        { error: "monthId is required" },
+        { status: 400 }
+      );
+    }
 
-//     // Normalize months → always YYYY-MM
-//     const normalize = (m: string) => {
-//       const [y, mo] = m.split("-");
-//       return `${y}-${mo.padStart(2, "0")}`;
-//     };
+    if (typeof installment !== "number" || installment < 0) {
+      return NextResponse.json(
+        { error: "Valid installment is required" },
+        { status: 400 }
+      );
+    }
 
-//     months = months.map(normalize);
+    const mandalId = request.decoded!.id;
 
-//     // Sort newest first
-//     months.sort((a, b) => b.localeCompare(a));
+    const updatedMonth = await MandalMonth.findOneAndUpdate(
+      { _id: monthId, mandal: mandalId },
+      { monthlyInstallment: installment },
+      { new: true }
+    );
 
-//     return NextResponse.json(months, { status: 200 });
-//   } catch (error) {
-//     return NextResponse.json(
-//       { error: "Internal server error" },
-//       { status: 500 }
-//     );
-//   }
-// }
+    if (!updatedMonth) {
+      return NextResponse.json(
+        { error: "Month not found" },
+        { status: 404 }
+      );
+    }
+
+    await MemberData.updateMany(
+      {
+        mandal: mandalId,
+        monthId,
+        paidInstallment: 0,
+        paidInterest: 0,
+      },
+      {
+        installment,
+      }
+    );
+
+    return NextResponse.json(
+      {
+        message: "Monthly installment updated successfully",
+        month: updatedMonth.month,
+        monthlyInstallment: updatedMonth.monthlyInstallment,
+      },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error("setNewInstallment error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+

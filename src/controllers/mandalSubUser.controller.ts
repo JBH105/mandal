@@ -9,12 +9,92 @@ import {
   AuthenticatedRequest,
 } from "@/middleware/authMiddleware";
 import MemberData from "@/model/MemberData";
+import MandalMonth from "@/model/MandalMonth";
 
 // Create Sub-user
+// export async function createMandalSubUser(request: AuthenticatedRequest) {
+//   try {
+//     const authResult = await authMiddleware(request, "mandal");
+//     if (authResult) return authResult;
 
+//     await connectToDB();
+
+//     const { decoded } = request;
+//     const mandal = await Mandal.findById(decoded?.id);
+//     if (!mandal) {
+//       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+//     }
+
+//     const body = await request.json();
+//     const { subUserName, phoneNumber, monthId } =
+//       validateMandalSubUserCreation(body);
+
+//     const existingSubUser = await MandalSubUser.findOne({ phoneNumber });
+//     if (existingSubUser) {
+//       return NextResponse.json(
+//         { error: "Phone number already in use" },
+//         { status: 400 }
+//       );
+//     }
+
+//     const subUser = await MandalSubUser.create({
+//       mandal: mandal._id,
+//       subUserName,
+//       phoneNumber,
+//     });
+
+//     const month = await MandalMonth.findOne({
+//       _id: monthId,
+//       mandal: mandal._id,
+//     });
+
+//     if (!month) {
+//       return NextResponse.json(
+//         { error: "Invalid month" },
+//         { status: 400 }
+//       );
+//     }
+
+//     const memberData = await MemberData.create({
+//       mandal: mandal._id,
+//       subUser: subUser._id,
+//       monthId: month._id,
+
+//       installment: month.monthlyInstallment,
+//       pendingInstallment: 0,
+//       paidInstallment: 0,
+
+//       interest: 0,
+//       pendingInterest: 0,
+//       paidInterest: 0,
+
+//       withdrawal: 0,
+//       newWithdrawal: 0,
+//       paidWithdrawal: 0,
+
+//       fine: 0,
+//       total: 0,
+//     });
+
+//     return NextResponse.json(
+//       {
+//         message: "Sub-user created successfully",
+//         data: memberData,
+//       },
+//       { status: 201 }
+//     );
+//   } catch (error: unknown) {
+//     console.error("Error creating sub-user:", error);
+//     return NextResponse.json(
+//       { error: "Internal server error" },
+//       { status: 500 }
+//     );
+//   }
+// }
+
+// Create Sub-user
 export async function createMandalSubUser(request: AuthenticatedRequest) {
   try {
-    // Apply auth middleware (mandal role required)
     const authResult = await authMiddleware(request, "mandal");
     if (authResult) return authResult;
 
@@ -27,11 +107,10 @@ export async function createMandalSubUser(request: AuthenticatedRequest) {
     }
 
     const body = await request.json();
-    // Validate input
-    const { subUserName, phoneNumber } = validateMandalSubUserCreation(body);
+    const { subUserName, phoneNumber, monthId } =
+      validateMandalSubUserCreation(body);
 
-    const { monthId } = body;
-
+    // 🔁 check duplicate phone
     const existingSubUser = await MandalSubUser.findOne({ phoneNumber });
     if (existingSubUser) {
       return NextResponse.json(
@@ -40,23 +119,61 @@ export async function createMandalSubUser(request: AuthenticatedRequest) {
       );
     }
 
-    const subUser = new MandalSubUser({
+    const subUser = await MandalSubUser.create({
       mandal: mandal._id,
       subUserName,
       phoneNumber,
     });
 
-    await subUser.save();
-
-    const dataBody = {
+    const currentMonth = await MandalMonth.findOne({
+      _id: monthId,
       mandal: mandal._id,
-      monthId,
+    });
+
+    if (!currentMonth) {
+      return NextResponse.json(
+        { error: "Invalid month" },
+        { status: 400 }
+      );
+    }
+
+
+    const previousMonths = await MandalMonth.find({
+      mandal: mandal._id,
+      month: { $lt: currentMonth.month },
+    });
+
+    const pendingInstallment = previousMonths.reduce(
+      (sum, m) => sum + (m.monthlyInstallment || 0),
+      0
+    );
+
+    const memberData = await MemberData.create({
+      mandal: mandal._id,
       subUser: subUser._id,
-    };
-     const data= await MemberData.create(dataBody);
-    
+      monthId: currentMonth._id,
+
+      installment: currentMonth.monthlyInstallment, 
+      pendingInstallment,                            
+      paidInstallment: 0,
+
+      interest: 0,
+      pendingInterest: 0,
+      paidInterest: 0,
+
+      withdrawal: 0,
+      newWithdrawal: 0,
+      paidWithdrawal: 0,
+
+      fine: 0,
+      total: 0,
+    });
+
     return NextResponse.json(
-      { message: "Sub-user created successfully" ,data},
+      {
+        message: "Sub-user created successfully",
+        data: memberData,
+      },
       { status: 201 }
     );
   } catch (error: unknown) {
@@ -67,6 +184,7 @@ export async function createMandalSubUser(request: AuthenticatedRequest) {
     );
   }
 }
+
 
 // Get all Sub-users
 export async function getMandalSubUsers(request: AuthenticatedRequest) {

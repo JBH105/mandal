@@ -15,14 +15,12 @@ import MandalMonth from "@/model/MandalMonth";
 
 export async function createMandal(request: AuthenticatedRequest) {
   try {
-    // Apply auth middleware (admin role required)
     const authResult = await authMiddleware(request, "admin");
     if (authResult) return authResult;
 
     await connectToDB();
 
     const body = await request.json();
-    // Validate input
     const {
       nameEn,
       nameGu,
@@ -61,6 +59,7 @@ export async function createMandal(request: AuthenticatedRequest) {
     const monthBody = {
       mandal: mandal._id,
       month: result,
+      monthlyInstallment: 0,
     };
 
     MandalMonth.create(monthBody);
@@ -227,110 +226,3 @@ export async function deleteMandal(request: AuthenticatedRequest) {
   }
 }
 
-// export async function updateMandalInstallment(request: AuthenticatedRequest) {
-//   try {
-//     const authResult = await authMiddleware(request);
-//     if (authResult) return authResult;
-
-//     await connectToDB();
-
-//     const mandalId = request.decoded?.id;
-
-//     const body = await request.json();
-//     const { installment, selectedMonth, isUpdate = false } = body;
-
-//     if (!mandalId || installment == null || !selectedMonth) {
-//       return NextResponse.json(
-//         { error: "Installment and selectedMonth are required" },
-//         { status: 400 }
-//       );
-//     }
-
-//     const mandal = await Mandal.findById(mandalId);
-//     if (!mandal)
-//       return NextResponse.json({ error: "Mandal not found" }, { status: 404 });
-
-//     const previousInstallment = mandal.setInstallment || 0;
-//     mandal.setInstallment = installment;
-//     await mandal.save();
-
-//     const uniqueMonths = await MemberData.distinct("month", {
-//       mandal: mandalId,
-//     });
-
-//     uniqueMonths.sort((a, b) => {
-//       const dateA = new Date(a + "-01");
-//       const dateB = new Date(b + "-01");
-//       return dateA.getTime() - dateB.getTime();
-//     });
-
-//     const selectedIndex = uniqueMonths.indexOf(selectedMonth);
-
-//     if (selectedIndex === -1) {
-//       return NextResponse.json(
-//         { error: "Selected month not found" },
-//         { status: 400 }
-//       );
-//     }
-
-//     const monthsToUpdate = uniqueMonths.slice(selectedIndex);
-//     console.log("Months to update:", monthsToUpdate);
-//     console.log("Previous installment:", previousInstallment);
-//     console.log("New installment:", installment);
-
-//     if (!isUpdate) {
-//       const updateResult = await MemberData.updateMany(
-//         {
-//           mandal: mandalId,
-//           month: { $in: monthsToUpdate },
-//           installment: 0,
-//         },
-//         {
-//           $set: { installment },
-//         }
-//       );
-
-//       return NextResponse.json(
-//         {
-//           message:
-//             "Hapto set for the first time. Applied to SELECTED month and FUTURE months where installment was 0.",
-//           updatedMonths: monthsToUpdate,
-//           updatedCount: updateResult.modifiedCount,
-//           setInstallment: installment,
-//           isFirstTime: true,
-//         },
-//         { status: 200 }
-//       );
-//     } else {
-//       const updateResult = await MemberData.updateMany(
-//         {
-//           mandal: mandalId,
-//           month: { $in: monthsToUpdate },
-//           $or: [{ installment: previousInstallment }, { installment: 0 }],
-//         },
-//         {
-//           $set: { installment },
-//         }
-//       );
-
-//       return NextResponse.json(
-//         {
-//           message:
-//             "Hapto updated. Applied to selected month and future months.",
-//           updatedMonths: monthsToUpdate,
-//           updatedCount: updateResult.modifiedCount,
-//           previousInstallment,
-//           setInstallment: installment,
-//           isUpdate: true,
-//         },
-//         { status: 200 }
-//       );
-//     }
-//   } catch (error) {
-//     console.error("Installment update error:", error);
-//     return NextResponse.json(
-//       { error: "Internal server error" },
-//       { status: 500 }
-//     );
-//   }
-// }

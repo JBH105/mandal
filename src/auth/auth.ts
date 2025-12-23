@@ -5,19 +5,23 @@ export interface MemberData {
   mandal: string;
   subUser: { _id: string; subUserName: string; phoneNumber: string };
   monthId: string;
+
   installment: number;
-  withdrawal: number;
+  pendingInstallment: number;
+  paidInstallment: number;
+
   interest: number;
-  fine: number;
+  pendingInterest: number;   
+  paidInterest: number;
+
+  withdrawal: number;
   paidWithdrawal: number;
   newWithdrawal: number;
-  total: number; 
-  // outerCheckbox: boolean;   
-  // innerCheckbox: boolean;
-  pendingInstallment: number;
-  paidInstallment : number ;
-  paidInterest : number ;
+
+  fine: number;
+  total: number;
 }
+
 
 export interface SubUser {
   _id: string;
@@ -80,7 +84,7 @@ export const createMemberDataApi = async (data: {
   paidWithdrawal: number;
   newWithdrawal: number;
   fine: number;
-
+  paidInterest: number;
 }) => {
   const response = await api.post("/memberData", data);
   return response.data;
@@ -90,17 +94,6 @@ export const getMemberDataApi = async (monthId: string): Promise<MemberData[]> =
   const response = await api.get(`/memberData?monthId=${monthId}`);
   return response.data as MemberData[];
 };
-
-// export const initializeMonthDataApi = async (month: string) => {
-//   const response = await api.post("/memberData/initialize", { month });
-//   return response.data;
-// };
-
-// export const getAllMonthsApi = async (): Promise<string[]> => {
-//   const response = await api.get(`/memberData?allMonths=true`);
-//   return response.data as string[];
-// };
-
 export const getAvailableSubUsersApi = async (monthId: string): Promise<SubUser[]> => {
   const response = await api.get(`/memberData/availableSubUsers?monthId=${monthId}`);
   return response.data as SubUser[];
@@ -119,7 +112,7 @@ export const setNewInstallmentApi = async (
 };
 
 
-export const getMonthApi = async (): Promise<{ _id: string; month: string }[]> => {
+export const getMonthApi = async (): Promise<{ _id: string; month: string ; monthlyInstallment: number; }[]> => {
   const response = await api.get("/month");
   return response.data;
 };

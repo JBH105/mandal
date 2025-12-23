@@ -123,12 +123,18 @@ export default function AnalyticsPage() {
   const [haptoValue, setHaptoValue] = useState<string>("");
   const [haptoLabelValue, setHaptoLabelValue] = useState<string>("");
   const [isInstallmentPaid, setIsInstallmentPaid] = useState<boolean>(true);
+  const [isPaymentLocked, setIsPaymentLocked] = useState<boolean>(false);
   const [isHaptoSet, setIsHaptoSet] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isAddMonthDialogOpen, setIsAddMonthDialogOpen] =
     useState<boolean>(false);
   const [newMonthName, setNewMonthName] = useState<string>("");
   const [isMonthLoading, setIsMonthLoading] = useState<boolean>(false);
+  const [displayTotals, setDisplayTotals] = useState({
+  installment: 0,
+  interest: 0,
+});
+
 
   const getSelectedMonthObjectId = (): string | null => {
     if (!selectedMonth) return null;
@@ -137,17 +143,34 @@ export default function AnalyticsPage() {
   };
 
   const getDisplayInstallmentValue = (row: MemberData) => {
-    const regularInstallment =
+    const installment =
       row.installment === 0 && mandalMonthlyInstallment > 0
         ? mandalMonthlyInstallment
         : row.installment;
 
+    const paid = row.paidInstallment || 0;
     const pending = row.pendingInstallment || 0;
-    // const interest = row.interest || 0;
 
-    const total = regularInstallment;
+    const displayValue =
+      paid === 0 || paid === installment ? installment : paid;
+
     return {
-      value: total,
+      value: displayValue,
+      hasPending: pending > 0,
+      pendingAmount: pending,
+    };
+  };
+
+  const getDisplayInterestValue = (row: MemberData) => {
+    const interest = row.interest || 0;
+    const paid = row.paidInterest || 0;
+    const pending = row.pendingInterest || 0;
+
+    const displayValue =
+      paid === 0 || paid === interest ? interest : paid;
+
+    return {
+      value: displayValue,
       hasPending: pending > 0,
       pendingAmount: pending,
     };
@@ -242,18 +265,11 @@ export default function AnalyticsPage() {
 
           setSelectedMonth(defaultMonthName);
 
-          // ✅ ID પાસ કરીને ડેટા મેળવો
+    
           const data = await getMemberDataApi(defaultMonthId);
           setMemberData(data);
           setFilteredMemberData(data);
 
-          // if (monthObjects.length > 1) {
-          //   const previousMonthId = monthObjects[1]._id;
-          //   const prevData = await getMemberDataApi(previousMonthId);
-          //   setPreviousMonthData(prevData);
-          // } else {
-          //   setPreviousMonthData([]);
-          // }
 
           setHasDataLoaded(true);
         } else {
@@ -288,7 +304,7 @@ export default function AnalyticsPage() {
       0
     );
     const totalInterest = memberData.reduce(
-      (sum, row) => sum + row.interest,
+      (sum, row) => sum + row.paidInterest,
       0
     );
     const totalFines = memberData.reduce((sum, row) => sum + row.fine, 0);
@@ -437,7 +453,10 @@ export default function AnalyticsPage() {
 
       const payload = {
         _id: currentMemberRecord._id,
-        paidInstallment: totalPaid,
+
+        paidInstallment: parseFloat(formData.installment) || 0,
+        paidInterest: parseFloat(formData.interest) || 0,
+
         paidWithdrawal: parseFloat(formData.paidWithdrawal) || 0,
         newWithdrawal: parseFloat(formData.newWithdrawal) || 0,
         fine: parseFloat(formData.fine) || 0,
@@ -456,7 +475,7 @@ export default function AnalyticsPage() {
         installment: "",
         withdrawal: "",
         interest: "",
-        fine: "",
+        fine: "", 
         paidWithdrawal: "",
         newWithdrawal: "",
         pendingInstallment: "",
@@ -646,11 +665,25 @@ finally {
     const totalInstallmentToShow =
       regularInstallment + (row.pendingInstallment || 0);
 
+    const totalInterestToShow =
+      (row.interest || 0) + (row.pendingInterest || 0);
+
+    const lockPayment =
+      (row.paidInstallment || 0) > 0 ||
+      (row.paidInterest || 0) > 0;
+
+    setIsPaymentLocked(lockPayment);
+
+    setDisplayTotals({
+      installment: totalInstallmentToShow,
+      interest: totalInterestToShow,
+    });
+
     setFormData({
       subUserId: row.subUser._id,
-      installment: totalInstallmentToShow.toString(),
+      installment:  "0" , 
       withdrawal: row.withdrawal?.toString() ?? "0",
-      interest: row.interest?.toString() ?? "0",
+      interest: "0",
       fine: row.fine?.toString() ?? "0",
       paidWithdrawal: row.paidWithdrawal?.toString() ?? "0",
       newWithdrawal: row.newWithdrawal?.toString() ?? "0",
@@ -662,6 +695,7 @@ finally {
     setSelectedMemberName(row.subUser?.subUserName || "");
     setIsAddDialogOpen(true);
   };
+
 
   const handleInputBlur = (field: keyof Omit<FormData, "subUserId">) => {
     if (formData[field] === "") {
@@ -1017,10 +1051,10 @@ finally {
           <DialogTrigger asChild></DialogTrigger>
           <DialogContent
             className="
-    max-w-[95vw] sm:max-w-2xl
-    p-4 sm:p-6
-    max-h-[90vh] /* limit height on small devices */
-    overflow-y-auto "
+                        max-w-[95vw] sm:max-w-2xl
+                        p-4 sm:p-6
+                        max-h-[90vh] /* limit height on small devices */
+                        overflow-y-auto "
             onPointerDownOutside={(e) => e.preventDefault()}
             onInteractOutside={(e) => e.preventDefault()}
             onEscapeKeyDown={(e) => e.preventDefault()}
@@ -1049,22 +1083,25 @@ finally {
                 <Label htmlFor="installment" className="text-sm sm:text-base">
                   હપ્તો (Installment)
                 </Label>
-                <Input
-                  id="installment"
-                  type="number"
-                  value={formData.installment}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      installment: e.target.value,
-                    })
-                  }
+                <div className="space-y-1">
+                  <Input
+                    id="installment"
+                    type="number"
+                    value={formData.installment}
+                    onChange={(e) =>
+                      setFormData({ ...formData, installment: e.target.value })
+                    }
                   onFocus={() => handleInputFocus("installment")}
                   onBlur={() => handleInputBlur("installment")}
                   placeholder="Enter installment"
                   className="text-base"
                   disabled={updatingMemberId !== null}
-                />
+                  />
+
+                  <p className="text-xs text-muted-foreground">
+                    Total (Current + Pending): ₹{displayTotals.installment}
+                  </p>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="withdrawal" className="text-sm sm:text-base">
@@ -1088,19 +1125,26 @@ finally {
                 <Label htmlFor="interest" className="text-sm sm:text-base">
                   બ્યાજ (Interest)
                 </Label>
-                <Input
-                  id="interest"
-                  type="number"
-                  value={formData.interest}
-                  onChange={(e) =>
-                    setFormData({ ...formData, interest: e.target.value })
-                  }
-                  onFocus={() => handleInputFocus("interest")}
+                <div className="space-y-1">
+                  <Input
+                    id="interest"
+                    type="number"
+                    value={formData.interest}
+                    onChange={(e) =>
+                      setFormData({ ...formData, interest: e.target.value })
+                    }
+                    onFocus={() => handleInputFocus("interest")}
                   onBlur={() => handleInputBlur("interest")}
-                  placeholder="Enter interest"
+                  placeholder="Enter interest "
                   className="text-base"
-                  disabled={updatingMemberId !== null}
-                />
+                    disabled={updatingMemberId !== null}
+                  />
+
+                  <p className="text-xs text-muted-foreground">
+                    Total (Current + Pending): ₹{displayTotals.interest}
+                  </p>
+                </div>
+
               </div>
               <div className="space-y-2">
                 <Label htmlFor="fine" className="text-sm sm:text-base">
@@ -1483,7 +1527,7 @@ finally {
                       const requiredInstallment = installmentInfo.value;
 
                       const isFullyPaid =
-                        (row.paidInstallment || 0) >= requiredInstallment;
+                        (row.paidInstallment) >= requiredInstallment;
 
                       return (
                         <TableRow key={row._id}>
@@ -1507,8 +1551,7 @@ finally {
                           <TableCell className="text-center text-xs md:text-sm">
                             <div className="flex flex-col items-center">
                               {(() => {
-                                const installmentInfo =
-                                  getDisplayInstallmentValue(row);
+                                const installmentInfo = getDisplayInstallmentValue(row);
 
                                 return (
                                   <div className="flex flex-col items-center">
@@ -1518,8 +1561,7 @@ finally {
 
                                     {installmentInfo.hasPending && (
                                       <span className="text-[10px] text-red-600 mt-0.5 font-medium">
-                                        (empty installment :{" "}
-                                        {installmentInfo.pendingAmount})
+                                        (empty installment : {installmentInfo.pendingAmount})
                                       </span>
                                     )}
                                   </div>
@@ -1527,7 +1569,6 @@ finally {
                               })()}
                             </div>
                           </TableCell>
-
                           <TableCell className="text-center text-xs md:text-sm font-semibold">
                             {carriedForwardAmount > 0 ? (
                               <div className="flex flex-col items-center">
@@ -1548,8 +1589,26 @@ finally {
                               "-"
                             )}
                           </TableCell>
-                          <TableCell className="text-center text-xs md:text-sm">
-                            {row?.interest > 0 ? `₹${row?.interest}` : "-"}
+                         <TableCell className="text-center text-xs md:text-sm">
+                            <div className="flex flex-col items-center">
+                              {(() => {
+                                const interestInfo = getDisplayInterestValue(row);
+
+                                return interestInfo.value > 0 ? (
+                                  <>
+                                    <span>₹{interestInfo.value.toLocaleString()}</span>
+
+                                    {interestInfo.hasPending && (
+                                      <span className="text-[10px] text-red-600 mt-0.5 font-medium">
+                                        (empty interest : {interestInfo.pendingAmount})
+                                      </span>
+                                    )}
+                                  </>
+                                ) : (
+                                  "-"
+                                );
+                              })()}
+                            </div>
                           </TableCell>
                           <TableCell className="text-center text-xs md:text-sm">
                             {row?.fine > 0 ? `₹${row?.fine}` : "-"}
@@ -1565,7 +1624,7 @@ finally {
                               : "-"}
                           </TableCell>
                           <TableCell className="text-center font-medium text-xs md:text-sm">
-                            {(row.installment + row.interest).toLocaleString()}
+                            {(row.paidInterest + row.paidInstallment).toLocaleString()}
                           </TableCell>
                           <TableCell className="text-center">
                             <Button

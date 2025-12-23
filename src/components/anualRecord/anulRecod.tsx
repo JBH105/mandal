@@ -12,9 +12,11 @@ import {
 } from "@/auth/auth";
 import { HiOutlineUserGroup } from "react-icons/hi";
 
+
 interface Month {
   _id: string;
   month: string;
+  monthlyInstallment: number;
 }
 
 interface Calculations {
@@ -42,6 +44,7 @@ interface AllMonthsData {
   data: MemberData[];
 }
 
+
 export default function AnnualRecordPage() {
   const [mandalName, setMandalName] = useState<string>("આઈ શ્રી ખોડિયાર");
   const [allMonthsData, setAllMonthsData] = useState<AllMonthsData[]>([]);
@@ -49,11 +52,12 @@ export default function AnnualRecordPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [uniqueMembers, setUniqueMembers] = useState<SubUser[]>([]);
 
+
   useEffect(() => {
     const fetchAllData = async () => {
       try {
         setIsLoading(true);
-        
+
         const mandals = await getMandals();
         if (mandals.length > 0) {
           setMandalName(mandals[0].nameGu);
@@ -61,29 +65,33 @@ export default function AnnualRecordPage() {
 
           const [users, monthList] = await Promise.all([
             getMandalSubUsersApi(),
-            getMonthApi(), 
+            getMonthApi(),
           ]);
 
           const filteredUsers = users.filter(
             (user: SubUser) => user.mandal === currentMandalId
           );
+
           setUniqueMembers(filteredUsers);
           setMonths(monthList);
 
           const allMonthData: AllMonthsData[] = [];
-          
+
           for (const monthObj of monthList) {
             try {
               const data: MemberData[] = await getMemberDataApi(monthObj._id);
               allMonthData.push({
                 month: monthObj.month,
-                data
+                data,
               });
             } catch (error) {
-              console.error(`Error fetching data for ${monthObj.month}:`, error);
+              console.error(
+                `Error fetching data for ${monthObj.month}:`,
+                error
+              );
             }
           }
-          
+
           setAllMonthsData(allMonthData);
         }
       } catch (error) {
@@ -97,11 +105,12 @@ export default function AnnualRecordPage() {
     fetchAllData();
   }, []);
 
-  const calculations = useMemo(() => {
-    const allData = allMonthsData.flatMap(month => month.data);
+
+  const calculations = useMemo<Calculations>(() => {
+    const allData = allMonthsData.flatMap((m) => m.data);
 
     const uniqueMemberIds = new Set(
-      allData.map(row => row.subUser?._id).filter(Boolean)
+      allData.map((row) => row.subUser?._id).filter(Boolean)
     );
 
     const totalInstallments = allData.reduce(
@@ -126,8 +135,7 @@ export default function AnnualRecordPage() {
 
     const totalMembers = uniqueMemberIds.size;
 
-    const totalName = totalInstallments  + totalWithdrawals;
-
+    const totalName = totalInstallments + totalWithdrawals;
     const bandSilak = totalName - totalNewWithdrawals;
     const Mandalcash = bandSilak;
 
@@ -149,8 +157,9 @@ export default function AnnualRecordPage() {
     };
   }, [allMonthsData]);
 
+
   const monthlySummaries = useMemo(() => {
-    return allMonthsData.map(monthData => {
+    return allMonthsData.map((monthData) => {
       const monthInstallments = monthData.data.reduce(
         (sum, row) => sum + (row.paidInstallment || 0),
         0
@@ -171,7 +180,9 @@ export default function AnnualRecordPage() {
         0
       );
 
-      const monthTotalName = monthInstallments + monthInterest + monthWithdrawals;
+      const monthTotalName =
+        monthInstallments + monthInterest + monthWithdrawals;
+
       const monthBandSilak = monthTotalName - monthNewWithdrawals;
 
       return {
@@ -181,31 +192,49 @@ export default function AnnualRecordPage() {
         withdrawals: monthWithdrawals,
         newWithdrawals: monthNewWithdrawals,
         totalName: monthTotalName,
-        bandSilak: monthBandSilak
+        bandSilak: monthBandSilak,
       };
     });
   }, [allMonthsData]);
 
-  
-  const installmentAnalysis = useMemo(() => {
-    const monthlyInstallmentAmount = 1000;
-    const totalPossibleInstallments = uniqueMembers.length * months.length * monthlyInstallmentAmount;
-    const totalActualInstallments = calculations.totalInstallments;
-    const collectionPercentage = totalPossibleInstallments > 0 
-      ? (totalActualInstallments / totalPossibleInstallments) * 100 
+
+const installmentAnalysis = useMemo(() => {
+  const totalPossibleInstallments = months.reduce((sum, m) => {
+    return sum + (m.monthlyInstallment || 0) * uniqueMembers.length;
+  }, 0);
+
+  const totalActualInstallments = calculations.totalInstallments;
+
+  const collectionPercentage =
+    totalPossibleInstallments > 0
+      ? (totalActualInstallments / totalPossibleInstallments) * 100
       : 0;
 
-    return {
-      monthlyInstallmentAmount,
-      totalPossibleInstallments,
-      totalActualInstallments,
-      collectionPercentage,
-      averageMonthlyInstallments: months.length > 0 ? calculations.totalInstallments / months.length : 0,
-      averageMonthlyPerMember: uniqueMembers.length > 0 
-        ? calculations.totalInstallments / months.length / uniqueMembers.length 
-        : 0
-    };
-  }, [calculations.totalInstallments, months.length, uniqueMembers.length]);
+  const averageMonthlyInstallmentAmount =
+    months.length > 0
+      ? months.reduce((sum, m) => sum + (m.monthlyInstallment || 0), 0) /
+        months.length
+      : 0;
+
+  return {
+    totalPossibleInstallments,
+    totalActualInstallments,
+    collectionPercentage,
+    averageMonthlyInstallments:
+      months.length > 0
+        ? totalActualInstallments / months.length
+        : 0,
+    averageMonthlyPerMember:
+      months.length > 0 && uniqueMembers.length > 0
+        ? totalActualInstallments / months.length / uniqueMembers.length
+        : 0,
+
+   
+    averageMonthlyInstallmentAmount,
+  };
+}, [months, uniqueMembers.length, calculations.totalInstallments]);
+
+
 
   if (isLoading) {
     return (
@@ -420,7 +449,7 @@ export default function AnnualRecordPage() {
                 ₹{installmentAnalysis.totalPossibleInstallments.toLocaleString()}
               </p>
               <p className="text-xs text-gray-500">
-                {uniqueMembers.length} members × {months.length} months × ₹{installmentAnalysis.monthlyInstallmentAmount}
+                {uniqueMembers.length} members × {months.length} months × ₹{installmentAnalysis.averageMonthlyInstallmentAmount}
               </p>
             </div>
             <div className="space-y-2">
@@ -463,11 +492,40 @@ export default function AnnualRecordPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b">
-                  <th className="text-left py-3 px-4">Month</th>
-                  <th className="text-right py-3 px-4">Installments</th>
-                  <th className="text-right py-3 px-4">Interest</th>
-                  <th className="text-right py-3 px-4">Withdrawals</th>
-                  <th className="text-right py-3 px-4">Band Silak</th>
+                  
+                  <th className="text-left py-3 px-4">
+                    <div className="flex flex-col">
+                    <span className="font-medium">Month</span>
+                    <span className="text-xs text-gray-500"> મહિનાઓ</span>
+                    </div>
+                     </th>
+                  <th className="text-right py-3 px-4">
+                    <div className="flex flex-col items-end">
+                      <span className="font-medium">Paid Installments</span>
+                      <span className="text-xs text-gray-500">ચૂકવેલ હપ્તાઓ</span>
+                    </div>
+                  </th>
+
+                  <th className="text-right py-3 px-4">
+                    <div className="flex flex-col items-end">
+                      <span className="font-medium">Paid Interest</span>
+                      <span className="text-xs text-gray-500">ચૂકવેલ વ્યાજ</span>
+                    </div>
+                  </th>
+
+                  <th className="text-right py-3 px-4">
+                    <div className="flex flex-col items-end">
+                      <span className="font-medium">Paid Withdrawals</span>
+                      <span className="text-xs text-gray-500">ચૂકવેલ ઉપાડ</span>
+                    </div>
+                  </th>
+                  <th className="text-right py-3 px-4">
+                      <div className="flex flex-col items-end">
+                    <span className="font-medium"> Band Silak </span>
+                    <span className="text-xs text-gray-500">બેન્ડ સિલક</span>
+                    </div>
+                  </th>
+
                 </tr>
               </thead>
               <tbody>

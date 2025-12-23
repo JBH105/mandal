@@ -141,106 +141,162 @@ export default function CreateMandalPage() {
         </Card>
 
         {/* Admin Credentials */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5" />
-              Mandal User Credentials
-            </CardTitle>
-            <CardDescription>મંડળ યુઝર લોગિન માટેની માહિતી (Mandal User login information)</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="mandalUserName">Mandal User Name</Label>
-                <Input
-                  id="mandalUserName"
-                  placeholder="Enter admin full name"
-                  value={formData.mandalUserName}
-                  onChange={(e) => handleInputChange("mandalUserName", e.target.value)}
-                  onBlur={() => handleBlur("mandalUserName")}
-                  className={isFieldInvalid("mandalUserName") ? 'border-destructive focus-visible:ring-destructive' : ''}
-                />
-                {isFieldInvalid("mandalUserName") && (
-                  <p className="text-destructive text-sm mt-1">{validationErrors.mandalUserName}</p>
-                )}
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="mandalUserPhone">User Phone</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">+91</span>
-                <Input
-                  id="mandalUserPhone"
-                  type="tel"
-                  placeholder="9876543210"
-                  value={formData.mandalUserPhone.replace(/^\+91\s*/, '')}
-                  onChange={(e) => handleInputChange("mandalUserPhone", `+91 ${e.target.value.replace(/[^0-9]/g, '')}`)}
-                  onBlur={() => handleBlur("mandalUserPhone")}
-                  maxLength={10}
-                  className={`pl-12 ${isFieldInvalid("mandalUserPhone") ? 'border-destructive focus-visible:ring-destructive' : ''}`}
-                />
-              </div>
-              {isFieldInvalid("mandalUserPhone") && (
-                <p className="text-destructive text-sm mt-1">{validationErrors.mandalUserPhone}</p>
-              )}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="mandalUserPassword">Password</Label>
-                <div className="relative">
-                  <Input
-                    id="mandalUserPassword"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Enter strong password"
-                    value={formData.mandalUserPassword}
-                    onChange={(e) => handleInputChange("mandalUserPassword", e.target.value)}
-                    onBlur={() => handleBlur("mandalUserPassword")}
-                    className={isFieldInvalid("mandalUserPassword") ? 'border-destructive focus-visible:ring-destructive' : ''}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
-                </div>
-                {isFieldInvalid("mandalUserPassword") && (
-                  <p className="text-destructive text-sm mt-1">{validationErrors.mandalUserPassword}</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <div className="relative">
-                  <Input
-                    id="confirmPassword"
-                    type={showConfirmPassword ? "text" : "password"}
-                    placeholder="Confirm password"
-                    value={formData.confirmPassword}
-                    onChange={(e) => handleInputChange("confirmPassword", e.target.value)}
-                    onBlur={() => handleBlur("confirmPassword")}
-                    className={isFieldInvalid("confirmPassword") ? 'border-destructive focus-visible:ring-destructive' : ''}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  >
-                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
-                </div>
-                {isFieldInvalid("confirmPassword") && (
-                  <p className="text-destructive text-sm mt-1">{validationErrors.confirmPassword}</p>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+       <Card>
+  <CardHeader>
+    <CardTitle className="flex items-center gap-2">
+      <Shield className="h-5 w-5" />
+      Mandal User Credentials
+    </CardTitle>
+    <CardDescription>
+      મંડળ યુઝર લોગિન માટેની માહિતી (Mandal User login information)
+    </CardDescription>
+  </CardHeader>
+
+  <CardContent className="space-y-4">
+    {/* Mandal User Name */}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="space-y-2">
+        <Label htmlFor="mandalUserName">Mandal User Name</Label>
+        <Input
+          id="mandalUserName"
+          name="username"
+          type="text"
+          autoComplete="username"
+          placeholder="Enter admin full name"
+          value={formData.mandalUserName}
+          onChange={(e) =>
+            handleInputChange("mandalUserName", e.target.value)
+          }
+          onBlur={() => handleBlur("mandalUserName")}
+          className={
+            isFieldInvalid("mandalUserName")
+              ? "border-destructive focus-visible:ring-destructive"
+              : ""
+          }
+        />
+        {isFieldInvalid("mandalUserName") && (
+          <p className="text-destructive text-sm mt-1">
+            {validationErrors.mandalUserName}
+          </p>
+        )}
+      </div>
+    </div>
+
+    {/* User Phone */}
+    <div className="space-y-2">
+      <Label htmlFor="mandalUserPhone">User Phone</Label>
+      <div className="relative">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+          +91
+        </span>
+        <Input
+          id="mandalUserPhone"
+          name="tel"
+          type="tel"
+          autoComplete="tel"
+          inputMode="numeric"
+          placeholder="9876543210"
+          value={formData.mandalUserPhone.replace(/^\+91\s*/, "")}
+          onChange={(e) =>
+            handleInputChange(
+              "mandalUserPhone",
+              `+91 ${e.target.value.replace(/[^0-9]/g, "")}`
+            )
+          }
+          onBlur={() => handleBlur("mandalUserPhone")}
+          maxLength={10}
+          className={`pl-12 ${
+            isFieldInvalid("mandalUserPhone")
+              ? "border-destructive focus-visible:ring-destructive"
+              : ""
+          }`}
+        />
+      </div>
+      {isFieldInvalid("mandalUserPhone") && (
+        <p className="text-destructive text-sm mt-1">
+          {validationErrors.mandalUserPhone}
+        </p>
+      )}
+    </div>
+
+    {/* Passwords */}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="space-y-2">
+        <Label htmlFor="mandalUserPassword">Password</Label>
+        <div className="relative">
+          <Input
+            id="mandalUserPassword"
+            name="new-password"
+            type={showPassword ? "text" : "password"}
+            autoComplete="new-password"
+            placeholder="Enter strong password"
+            value={formData.mandalUserPassword}
+            onChange={(e) =>
+              handleInputChange("mandalUserPassword", e.target.value)
+            }
+            onBlur={() => handleBlur("mandalUserPassword")}
+            className={
+              isFieldInvalid("mandalUserPassword")
+                ? "border-destructive focus-visible:ring-destructive"
+                : ""
+            }
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="absolute right-0 top-0 h-full px-3 py-2"
+            onClick={() => setShowPassword(!showPassword)}
+          >
+            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </Button>
+        </div>
+        {isFieldInvalid("mandalUserPassword") && (
+          <p className="text-destructive text-sm mt-1">
+            {validationErrors.mandalUserPassword}
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="confirmPassword">Confirm Password</Label>
+        <div className="relative">
+          <Input
+            id="confirmPassword"
+            name="new-password"
+            type={showConfirmPassword ? "text" : "password"}
+            autoComplete="new-password"
+            placeholder="Confirm password"
+            value={formData.confirmPassword}
+            onChange={(e) =>
+              handleInputChange("confirmPassword", e.target.value)
+            }
+            onBlur={() => handleBlur("confirmPassword")}
+            className={
+              isFieldInvalid("confirmPassword")
+                ? "border-destructive focus-visible:ring-destructive"
+                : ""
+            }
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="absolute right-0 top-0 h-full px-3 py-2"
+            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+          >
+            {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </Button>
+        </div>
+        {isFieldInvalid("confirmPassword") && (
+          <p className="text-destructive text-sm mt-1">
+            {validationErrors.confirmPassword}
+          </p>
+        )}
+      </div>
+    </div>
+  </CardContent>
+</Card>
 
         {/* Configuration Settings */}
         <Card>

@@ -70,10 +70,11 @@ export const validateMandalCreation = (data: {
 };
 
 // Validation function for MandalSubUser creation
-export const validateMandalSubUserCreation = (data: { subUserName: string; phoneNumber: string }) => {
+export const validateMandalSubUserCreation = (data: { subUserName: string; phoneNumber: string  , monthId : string }) => {
   const schema = z.object({
     subUserName: requiredStringSchema('Sub-user name'),
     phoneNumber: phoneNumberSchema,
+    monthId: z.string().min(1, "Month is required"),
   });
   return schema.parse(data);
 };
