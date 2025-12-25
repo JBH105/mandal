@@ -372,35 +372,97 @@ export const SkeletonBox: React.FC<SkeletonProps> = ({ className = "", rounded =
 export const SkeletonCard: React.FC<{ className?: string }> = ({ className = "" }) => {
   return (
     <div className={cn("p-4 rounded-lg bg-gradient-to-br from-white to-gray-50 border border-gray-200/50 relative overflow-hidden shadow-sm", className)}>
-      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-40 animate-shimmer" />
-      <div className="flex items-center justify-between mb-3">
-        <div className="w-28 h-4 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
-        <div className="w-6 h-6 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
-      </div>
+      {/* <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-40 animate-shimmer" /> */}
       <div className="space-y-2">
-        <div className="w-16 h-8 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
-        <div className="w-24 h-3 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
+        <div className="w-20 h-3 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
+        <div className="w-5 h-5 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
       </div>
     </div>
   );
 };
 
-// Update your loader file - modify the SkeletonTable component to accept custom column widths:
+// New: SkeletonMobileCard — mirrors the exact DOM & classes of the mobile member card to ensure pixel-perfect skeletons
+export const SkeletonMobileCard: React.FC<{ className?: string }> = ({ className = "" }) => {
+  return (
+    <div className={cn("bg-gray-100 border border-gray-200 rounded-md p-2 flex flex-col min-h-[210px] relative overflow-hidden", className)}>
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-40 animate-shimmer" />
+
+      <div className="flex items-center justify-between">
+        <div className="h-4 w-4 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
+        <div className="h-4 w-24 bg-gradient-to-r from-gray-200 to-gray-300 rounded ml-2 flex-1" />
+        <div className="h-4 w-6 bg-gradient-to-r from-gray-200 to-gray-300 rounded ml-1" />
+      </div>
+
+      <div className="flex justify-between mt-2">
+        <div className="h-3 w-12 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
+        <div className="h-3 w-16 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
+      </div>
+
+      <div className="flex justify-between mt-1">
+        <div className="h-3 w-12 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
+        <div className="h-3 w-16 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
+      </div>
+
+      <div className="flex justify-between mt-1">
+        <div className="h-3 w-8 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
+        <div className="h-3 w-12 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
+      </div>
+
+      <div className="flex justify-between mt-1">
+        <div className="h-3 w-8 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
+        <div className="h-3 w-12 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
+      </div>
+
+      <div className="flex justify-between mt-1">
+        <div className="h-3 w-16 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
+        <div className="h-3 w-12 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
+      </div>
+
+      <div className="flex justify-between mt-1">
+        <div className="h-3 w-16 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
+        <div className="h-3 w-12 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
+      </div>
+
+      <div className="mt-2 w-full h-8 bg-gradient-to-r from-gray-200 to-gray-300 rounded" />
+    </div>
+  );
+};
+
+// Update your loader file - modify the SkeletonTable component to accept custom column widths and match the real table min-width
 export const SkeletonTable: React.FC<{ 
   rows?: number; 
   cols?: number; 
   className?: string;
   colWidths?: string[];
-}> = ({ rows = 4, cols = 6, className = "", colWidths = [] }) => {
-  // Use provided colWidths or default ones
-  const defaultColWidths = Array.from({ length: cols }).map((_, idx) => 
-    idx === 0 ? "w-12" : idx === 1 ? "w-12" : "w-[150px]"
-  );
+  minWidthClass?: string;
+}> = ({ rows = 4, cols = 6, className = "", colWidths = [], minWidthClass = "min-w-[1000px]" }) => {
+  // Use provided colWidths or default ones (try to map to the actual table used in AnalyticsPage)
+  const defaultColWidths = (() => {
+    if (cols === 11) {
+      // Map roughly to: checkbox, sr, name, haptu, withdraw, interest, fine, paidWithdrawal, newWithdrawal, total, action
+      return [
+        "w-12", // checkbox
+        "w-10", // sr
+        "w-[320px]", // name
+        "w-24", // haptu
+        "w-20", // withdraw
+        "w-20", // interest
+        "w-20", // fine
+        "w-24", // paidWithdrawal
+        "w-24", // newWithdrawal
+        "w-28", // total
+        "w-24",
+      ];
+    }
+    return Array.from({ length: cols }).map((_, idx) => (idx === 0 ? "w-12" : idx === 1 ? "w-12" : "w-[150px]"));
+  })();
+
   const widths = colWidths.length > 0 ? colWidths : defaultColWidths;
+
   
   return (
     <div className={cn("w-full overflow-x-auto relative", className)}>
-      <div className="min-w-[800px] border border-gray-200/50 rounded-lg p-4 bg-gradient-to-b from-white to-gray-50/50 relative overflow-hidden shadow-sm">
+      <div className={cn(minWidthClass, "border border-gray-200/50 rounded-lg p-4 bg-gradient-to-b from-white to-gray-50/50 relative overflow-hidden shadow-sm")}>
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-40 animate-shimmer" />
         <div className="grid grid-cols-7 gap-4 mb-3">
           {widths.map((w, i) => (

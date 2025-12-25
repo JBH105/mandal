@@ -23,7 +23,6 @@ export async function exportLedgerPdf({
     pendingAmount: number;
   };
 }) {
-  /* ================= FONT SETUP ================= */
 
   const regularFont = await fetch("/fonts/NotoSansGujarati-Regular.ttf");
   const boldFont = await fetch("/fonts/NotoSansGujarati-Bold.ttf");
@@ -43,7 +42,6 @@ export async function exportLedgerPdf({
     },
   };
 
-  /* ================= CALCULATE METRICS ================= */
 
   let totalInstallment = 0;
   let totalCarriedForward = 0;
@@ -71,7 +69,6 @@ export async function exportLedgerPdf({
     if (interestInfo.hasPending) totalPending += interestInfo.pendingAmount;
   });
 
-  /* ================= TABLE BODY ================= */
 
   const tableBody: any[] = [];
 
@@ -88,13 +85,12 @@ export async function exportLedgerPdf({
     { text: "કુલ", bold: true, alignment: "right", fillColor: "#4a4a4a", color: "#ffffff", fontSize: 8 },
   ]);
 
-  // Data rows
   rows.forEach((row: any, index: number) => {
     const installmentInfo = getDisplayInstallmentValue(row);
     const interestInfo = getDisplayInterestValue(row);
     const carriedForward = calculateCarriedForwardAmount(row?.subUser?._id);
 
-    const rowColor = index % 2 === 0 ? "#f5f5f5" : "#ffffff";
+    const rowColor = index % 2 === 0 ? "#fce8e8" : "#ffffff";
 
     tableBody.push([
       { text: index + 1, alignment: "center", fontSize: 7, fillColor: rowColor },
@@ -107,11 +103,11 @@ export async function exportLedgerPdf({
         alignment: "right",
         fillColor: rowColor,
       },
-      { text: carriedForward > 0 ? `₹${carriedForward}` : "-", alignment: "right", fontSize: 7, fillColor: rowColor },
+       { text: row.withdrawal > 0 ? `₹${row.withdrawal}` : "-", alignment: "right", fontSize: 7, fillColor: rowColor },
       {
         stack: [
           { text: interestInfo.value > 0 ? `₹${interestInfo.value}` : "-", fontSize: 7 },
-          interestInfo.hasPending ? { text: `(પેન્ડિંગ: ₹${interestInfo.pendingAmount})`, fontSize: 5, color: "#666666" } : [],
+          interestInfo.hasPending ? { text: `(પેન્ડિંગ: ₹${interestInfo.pendingAmount})`, fontSize: 5, color: "#666666" } : [], 
         ],
         alignment: "right",
         fillColor: rowColor,
@@ -123,10 +119,8 @@ export async function exportLedgerPdf({
     ]);
   });
 
-  /* ================= PDF CONTENT ================= */
 
   const content: any[] = [
-    // 🎯 HEADER
     {
       table: {
         widths: ["*"],
@@ -135,36 +129,90 @@ export async function exportLedgerPdf({
             {
               stack: [
                 { text: mandalName, fontSize: 16, bold: true, color: "#2a2a2a", alignment: "center" },
-                { text: `મહિનો: ${selectedMonth}`, fontSize: 11, color: "#666666", alignment: "center", margin: [0, 3, 0, 0] },
+                { text: `મહિનો: ${selectedMonth}`, fontSize: 11, color: "#666666", alignment: "center", margin: [0, 2, 0, 0] },
               ],
-              fillColor: "#e8e8e8",
+              fillColor: "#ffffff",
               border: [false, false, false, false],
-              margin: [0, 8, 0, 8],
+              margin: [0, 6, 0, 6],
             },
           ],
         ],
       },
       layout: "noBorders",
-      margin: [0, 0, 0, 15],
+      margin: [0, 0, 0, 10],
     },
 
-    // 📊 KEY METRICS (Gray & White)
+    {
+      table: {
+        widths: ["*", "*", "*", "*"],
+        body: [
+          [
+            {
+              stack: [
+                { text: "કુલ સભ્યો", fontSize: 8, color: "#666666", alignment: "center" },
+                { text: rows.length.toString(), fontSize: 18, bold: true, color: "#2a2a2a", alignment: "center", margin: [0, 1, 0, 0] },
+              ],
+              fillColor: "#ffffff",
+              margin: [0, 4, 0, 4],
+            },
+
+            {
+              stack: [
+                { text: "કુલ હપ્તો", fontSize: 8, color: "#666666", alignment: "center" },
+                { text: `₹${totalInstallment}`, fontSize: 18, bold: true, color: "#2a2a2a", alignment: "center", margin: [0, 1, 0, 0] },
+              ],
+              fillColor: "#ffffff",
+              margin: [0, 4, 0, 4],
+            },
+
+            {
+              stack: [
+                { text: "કુલ વ્યાજ", fontSize: 8, color: "#666666", alignment: "center" },
+                { text: `₹${totalInterest}`, fontSize: 18, bold: true, color: "#2a2a2a", alignment: "center", margin: [0, 1, 0, 0] },
+              ],
+              fillColor: "#ffffff",
+              margin: [0, 4, 0, 4],
+            },
+
+            {
+              stack: [
+                { text: "કુલ યોગ", fontSize: 8, color: "#666666", alignment: "center" },
+                { text: `₹${grandTotal}`, fontSize: 18, bold: true, color: "#2a2a2a", alignment: "center", margin: [0, 1, 0, 0] },
+              ],
+              fillColor: "#ffffff",
+              margin: [0, 4, 0, 4],
+            },
+          ],
+        ],
+      },
+      layout: {
+        hLineWidth: (i: number, node?: any) => (i === 0 || i === (node?.table?.body?.length || 1)) ? 1 : 0,
+        vLineWidth: () => 0.5,
+        hLineColor: () => "#cccccc",
+        vLineColor: () => "#cccccc",
+        paddingLeft: () => 6,
+        paddingRight: () => 6,
+        paddingTop: () => 6,
+        paddingBottom: () => 6,
+      },
+      margin: [0, 0, 0, 4],
+    },
+
+
     {
       columns: [
-        {
+      {
           width: "*",
           table: {
             widths: ["*"],
             body: [
               [
                 {
-                  stack: [
-                    { text: "કુલ સભ્યો", fontSize: 8, color: "#666666", alignment: "center" },
-                    { text: rows.length.toString(), fontSize: 20, bold: true, color: "#2a2a2a", alignment: "center", margin: [0, 5, 0, 0] },
+                  text: [
+                    { text: "કુલ દંડ : ", fontSize: 8, color: "#666666" },
+                    { text: ` ${totalFine}`, fontSize: 9, bold: true, color: "#2a2a2a" },
                   ],
-                  fillColor: "#f0f0f0",
-                  border: [false, false, false, false],
-                  margin: [0, 10, 0, 10],
+                  margin: [4, 0, 4, 0],
                 },
               ],
             ],
@@ -172,7 +220,6 @@ export async function exportLedgerPdf({
           layout: "noBorders",
           margin: [0, 0, 3, 0],
         },
-
         {
           width: "*",
           table: {
@@ -180,41 +227,11 @@ export async function exportLedgerPdf({
             body: [
               [
                 {
-                  stack: [
-                    { text: "કુલ હપ્તો", fontSize: 8, color: "#666666", alignment: "center" },
-                    { text: `₹${totalInstallment}`, fontSize: 20, bold: true, color: "#2a2a2a", alignment: "center", margin: [0, 5, 0, 0] },
+                  text: [
+                    { text: "કુલ પેન્ડિંગ: ", fontSize: 8, color: "#666666" },
+                    { text: ` ${totalPending}`, fontSize: 9, bold: true, color: "#2a2a2a" },
                   ],
-                  fillColor: "#ffffff",
-                  border: [true, true, true, true],
-                  borderColor: ["#cccccc", "#cccccc", "#cccccc", "#cccccc"],
-                  margin: [0, 10, 0, 10],
-                },
-              ],
-            ],
-          },
-          layout: {
-            hLineWidth: () => 1,
-            vLineWidth: () => 1,
-            hLineColor: () => "#cccccc",
-            vLineColor: () => "#cccccc",
-          },
-          margin: [0, 0, 3, 0],
-        },
-
-        {
-          width: "*",
-          table: {
-            widths: ["*"],
-            body: [
-              [
-                {
-                  stack: [
-                    { text: "કુલ વ્યાજ", fontSize: 8, color: "#666666", alignment: "center" },
-                    { text: `₹${totalInterest}`, fontSize: 20, bold: true, color: "#2a2a2a", alignment: "center", margin: [0, 5, 0, 0] },
-                  ],
-                  fillColor: "#f0f0f0",
-                  border: [false, false, false, false],
-                  margin: [0, 10, 0, 10],
+                  margin: [4, 0, 4, 0],
                 },
               ],
             ],
@@ -222,7 +239,6 @@ export async function exportLedgerPdf({
           layout: "noBorders",
           margin: [0, 0, 3, 0],
         },
-
         {
           width: "*",
           table: {
@@ -230,114 +246,31 @@ export async function exportLedgerPdf({
             body: [
               [
                 {
-                  stack: [
-                    { text: "કુલ યોગ", fontSize: 8, color: "#666666", alignment: "center" },
-                    { text: `₹${grandTotal}`, fontSize: 20, bold: true, color: "#2a2a2a", alignment: "center", margin: [0, 5, 0, 0] },
+                  text: [
+                    { text: "આગળનો ઉધાર: ", fontSize: 8, color: "#666666" },
+                    { text: ` ${totalCarriedForward}`, fontSize: 9, bold: true, color: "#2a2a2a" },
                   ],
-                  fillColor: "#ffffff",
-                  border: [true, true, true, true],
-                  borderColor: ["#cccccc", "#cccccc", "#cccccc", "#cccccc"],
-                  margin: [0, 10, 0, 10],
+                  margin: [4, 0, 4, 0],
                 },
               ],
             ],
           },
-          layout: {
-            hLineWidth: () => 1,
-            vLineWidth: () => 1,
-            hLineColor: () => "#cccccc",
-            vLineColor: () => "#cccccc",
-          },
-        },
+          layout: "noBorders",
+        }
       ],
-      margin: [0, 0, 0, 12],
+      margin: [0, 0, 0, 2],
     },
 
-    // 📈 SECONDARY METRICS
-    {
-      columns: [
-        {
-          width: "*",
-          table: {
-            widths: ["*"],
-            body: [
-              [
-                {
-                  columns: [
-                    { text: "કુલ દંડ:", fontSize: 8, color: "#666666", width: "auto" },
-                    { text: `₹${totalFine}`, fontSize: 9, bold: true, color: "#2a2a2a", width: "*", alignment: "right" },
-                  ],
-                  fillColor: "#e8e8e8",
-                  border: [false, false, false, false],
-                  margin: [8, 6, 8, 6],
-                },
-              ],
-            ],
-          },
-          layout: "noBorders",
-          margin: [0, 0, 3, 0],
-        },
-        {
-          width: "*",
-          table: {
-            widths: ["*"],
-            body: [
-              [
-                {
-                  columns: [
-                    { text: "કુલ પેન્ડિંગ:", fontSize: 8, color: "#666666", width: "auto" },
-                    { text: `₹${totalPending}`, fontSize: 9, bold: true, color: "#2a2a2a", width: "*", alignment: "right" },
-                  ],
-                  fillColor: "#ffffff",
-                  border: [true, true, true, true],
-                  borderColor: ["#cccccc", "#cccccc", "#cccccc", "#cccccc"],
-                  margin: [8, 6, 8, 6],
-                },
-              ],
-            ],
-          },
-          layout: {
-            hLineWidth: () => 1,
-            vLineWidth: () => 1,
-            hLineColor: () => "#cccccc",
-            vLineColor: () => "#cccccc",
-          },
-          margin: [0, 0, 3, 0],
-        },
-        {
-          width: "*",
-          table: {
-            widths: ["*"],
-            body: [
-              [
-                {
-                  columns: [
-                    { text: "આગળનો ઉધાર:", fontSize: 8, color: "#666666", width: "auto" },
-                    { text: `₹${totalCarriedForward}`, fontSize: 9, bold: true, color: "#2a2a2a", width: "*", alignment: "right" },
-                  ],
-                  fillColor: "#e8e8e8",
-                  border: [false, false, false, false],
-                  margin: [8, 6, 8, 6],
-                },
-              ],
-            ],
-          },
-          layout: "noBorders",
-        },
-      ],
-      margin: [0, 0, 0, 18],
-    },
 
-    // 📋 TABLE TITLE
+
     {
       text: "સભ્યોની વિગતવાર માહિતી",
-      fontSize: 11,
+      fontSize: 10,
       bold: true,
       color: "#2a2a2a",
-      margin: [0, 0, 0, 8],
+      margin: [0, 0, 0, 2],
     },
 
-    // 📊 DATA TABLE
     {
       table: {
         headerRows: 1,
@@ -349,15 +282,14 @@ export async function exportLedgerPdf({
         vLineWidth: () => 0.5,
         hLineColor: () => "#999999",
         vLineColor: () => "#cccccc",
-        paddingLeft: () => 3,
-        paddingRight: () => 3,
-        paddingTop: () => 4,
-        paddingBottom: () => 4,
+        paddingLeft: () => 2,
+        paddingRight: () => 2,
+        paddingTop: () => 1,
+        paddingBottom: () => 1,
       },
     },
   ];
 
-  /* ================= PDF DEFINITION ================= */
 
   const docDefinition: any = {
     pageSize: "A4",

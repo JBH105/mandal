@@ -53,20 +53,24 @@ export const getMandals = async () => {
   return response.data;
 };
 
-export const updateMandal = async (id: string, data: {
-  nameEn: string;
-  nameGu: string;
-  userName: string;
-  isActive: boolean;
-}) => {
-  const response = await api.put(`/mandal?id=${id}`, data);
+export const updateMandal = async (
+  id: string,
+  data: {
+    nameEn: string;
+    nameGu: string;
+    userName: string;
+    isActive: boolean;
+  }
+) => {
+  const response = await api.put(`/mandal/${id}`, data);
   return response.data;
 };
 
 export const deleteMandal = async (id: string) => {
-  const response = await api.delete(`/mandal?id=${id}`);
+  const response = await api.delete(`/mandal/${id}`);
   return response.data;
 };
+
 
 export const createMandalSubUserApi = async (data: { subUserName: string; phoneNumber: string  , monthId : string }) => {
   const response = await api.post("/mandalSubUser", data);
@@ -90,14 +94,11 @@ export const createMemberDataApi = async (data: {
   return response.data;
 };
 
-export const getMemberDataApi = async (monthId: string): Promise<MemberData[]> => {
-  const response = await api.get(`/memberData?monthId=${monthId}`);
-  return response.data as MemberData[];
+export const getMemberDataApi = async (monthId: string) => {
+  const response = await api.get(`/memberData/${monthId}`);
+  return response.data;
 };
-export const getAvailableSubUsersApi = async (monthId: string): Promise<SubUser[]> => {
-  const response = await api.get(`/memberData/availableSubUsers?monthId=${monthId}`);
-  return response.data as SubUser[];
-};
+
 
 
 export const setNewInstallmentApi = async (

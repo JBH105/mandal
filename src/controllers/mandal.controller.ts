@@ -106,20 +106,19 @@ export async function getMandals(request: AuthenticatedRequest) {
   }
 }
 
-export async function updateMandal(request: AuthenticatedRequest) {
+export async function updateMandal(
+  request: AuthenticatedRequest,
+  id: string
+) {
   try {
-    // Apply auth middleware (admin role required)
     const authResult = await authMiddleware(request, "admin");
     if (authResult) return authResult;
 
     await connectToDB();
 
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
-
-    if (!id) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
-        { error: "Mandal ID is required" },
+        { error: "Invalid Mandal ID format" },
         { status: 400 }
       );
     }
@@ -127,7 +126,6 @@ export async function updateMandal(request: AuthenticatedRequest) {
     const body = await request.json();
     const { nameEn, nameGu, userName, isActive } = body;
 
-    // Validate input
     if (!nameEn || !nameGu || !userName) {
       return NextResponse.json(
         { error: "nameEn, nameGu, and userName are required" },
@@ -140,11 +138,11 @@ export async function updateMandal(request: AuthenticatedRequest) {
       return NextResponse.json({ error: "Mandal not found" }, { status: 404 });
     }
 
-    // Update only allowed fields
     mandal.nameEn = nameEn;
     mandal.nameGu = nameGu;
     mandal.userName = userName;
-    mandal.isActive = isActive !== undefined ? isActive : mandal.isActive;
+    mandal.isActive =
+      isActive !== undefined ? isActive : mandal.isActive;
 
     await mandal.save();
 
@@ -152,8 +150,8 @@ export async function updateMandal(request: AuthenticatedRequest) {
       { message: "Mandal updated successfully" },
       { status: 200 }
     );
-  } catch (error: unknown) {
-    console.log("🚀 ~ updateMandal ~ error:", error);
+  } catch (error) {
+    console.error("updateMandal error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -161,22 +159,15 @@ export async function updateMandal(request: AuthenticatedRequest) {
   }
 }
 
-export async function deleteMandal(request: AuthenticatedRequest) {
+export async function deleteMandal(
+  request: AuthenticatedRequest,
+  id: string
+) {
   try {
     const authResult = await authMiddleware(request, "admin");
     if (authResult) return authResult;
 
     await connectToDB();
-
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
-
-    if (!id) {
-      return NextResponse.json(
-        { error: "Mandal ID is required" },
-        { status: 400 }
-      );
-    }
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
@@ -185,39 +176,45 @@ export async function deleteMandal(request: AuthenticatedRequest) {
       );
     }
 
-    const objectId = new mongoose.Types.ObjectId(id);
+    const mandalId = new mongoose.Types.ObjectId(id);
 
-    const mandal = await Mandal.findById(objectId);
+    const mandal = await Mandal.findById(mandalId);
     if (!mandal) {
-      return NextResponse.json({ error: "Mandal not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Mandal not found" },
+        { status: 404 }
+      );
     }
 
-    const memberDeleteResult = await MemberData.deleteMany({
-      mandal: objectId,
-    });
-    const subUserDeleteResult = await MandalSubUser.deleteMany({
-      mandal: objectId,
-    });
-
-    console.log("Deleted MemberData count:", memberDeleteResult.deletedCount);
-    console.log(
-      "Deleted MandalSubUser count:",
-      subUserDeleteResult.deletedCount
+    // ✅ 1. Fetch all months of this mandal
+    const months = await MandalMonth.find(
+      { mandal: mandalId },
+      { _id: 1 }
     );
 
-    await Mandal.findByIdAndDelete(objectId);
+    const monthIds = months.map((m) => m._id);
+
+    // ✅ 2. Delete member data for ALL months
+    if (monthIds.length > 0) {
+      await MemberData.deleteMany({
+        monthId: { $in: monthIds },
+      });
+    }
+
+    // ✅ 3. Delete months
+    await MandalMonth.deleteMany({ mandal: mandalId });
+
+    // ✅ 4. Delete sub users
+    await MandalSubUser.deleteMany({ mandal: mandalId });
+
+    // ✅ 5. Delete mandal
+    await Mandal.findByIdAndDelete(mandalId);
 
     return NextResponse.json(
-      {
-        message: "Mandal and all related data deleted successfully",
-        details: {
-          deletedMembers: memberDeleteResult.deletedCount,
-          deletedSubUsers: subUserDeleteResult.deletedCount,
-        },
-      },
+      { message: "Mandal and all related data deleted successfully" },
       { status: 200 }
     );
-  } catch (error: unknown) {
+  } catch (error) {
     console.error("deleteMandal error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
@@ -225,4 +222,3 @@ export async function deleteMandal(request: AuthenticatedRequest) {
     );
   }
 }
-
