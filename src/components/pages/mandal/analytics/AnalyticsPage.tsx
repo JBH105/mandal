@@ -173,18 +173,21 @@ export default function AnalyticsPage() {
   };
 
   const getDisplayInterestValue = (row: MemberData) => {
-    const interest = row.interest || 0;
-    const paid = row.paidInterest || 0;
-    const pending = row.pendingInterest || 0;
+   const interest = row.interest || 0;
+  const paid = row.paidInterest || 0;
+  const pending = row.pendingInterest || 0;
 
-    const displayValue =
-      paid === 0 || paid === interest ? interest : paid;
+  const showDash = interest === 0;
 
-    return {
-      value: displayValue,
-      hasPending: pending > 0,
-      pendingAmount: pending,
-    };
+  const displayValue =
+    paid === 0 || paid === interest ? interest : paid;
+
+  return {
+    value: displayValue,   // ✅ ALWAYS number
+    showDash,              // ✅ UI-only flag
+    hasPending: pending > 0,
+    pendingAmount: pending,
+  };
   };
 
   const getCurrentMonth = () => {
@@ -192,6 +195,16 @@ export default function AnalyticsPage() {
     const year = now.getFullYear();
     const month = (now.getMonth() + 1).toString().padStart(2, "0");
     return `${year}-${month}`;
+  };
+
+  const isPastMonth = (selectedMonth: string) => {
+    if (!selectedMonth || months.length === 0) return true;
+
+    const mandalCurrentMonth = months[0].month; 
+    const selected = new Date(selectedMonth + "-01");
+    const current = new Date(mandalCurrentMonth + "-01");
+
+    return selected < current; 
   };
 
 
@@ -341,7 +354,7 @@ export default function AnalyticsPage() {
     const totalMembers = memberData.length;
     const totalName = memberData.reduce((sum, row) => {
       const paidInstallment = row.paidInstallment || 0;
-      const interestToAdd = paidInstallment > 0 ? row.interest || 0 : 0;
+      const interestToAdd = row.paidInterest || 0;
       return sum + paidInstallment + interestToAdd + (row.paidWithdrawal || 0);
     }, 0);
 
@@ -1471,38 +1484,38 @@ const handleSetHapto = async () => {
         <CardContent>
           <div className="overflow-x-auto w-full sm:block">
             <div className="max-h-[360px] overflow-y-auto">
-              <Table className="min-w-[1000px] w-full">
+             <Table className="min-w-[1000px] w-full">
                 <TableHeader className="sticky top-0 z-20 bg-white">
                   <TableRow className="bg-muted/50">
-                    <TableHead className="sticky top-0 bg-white z-30 text-center"></TableHead>
-                    <TableHead className="sticky top-0 bg-white z-30 text-center">
+                    <TableHead className="sticky top-0 bg-white z-30 text-center py-4"></TableHead>
+                    <TableHead className="sticky top-0 bg-white z-30 text-center py-4">
                       ક્રમ નં.
                     </TableHead>
-                    <TableHead className="sticky top-0 bg-white z-30">
+                    <TableHead className="sticky top-0 bg-white z-30 py-4">
                       સભ્યનું નામ
                     </TableHead>
-                    <TableHead className="sticky top-0 bg-white z-30 text-center">
+                    <TableHead className="sticky top-0 bg-white z-30 text-center py-4">
                       હપ્તો
                     </TableHead>
-                    <TableHead className="sticky top-0 bg-white z-30 text-center">
+                    <TableHead className="sticky top-0 bg-white z-30 text-center py-4">
                       આ.નો ઉ.
                     </TableHead>
-                    <TableHead className="sticky top-0 bg-white z-20 text-center">
+                    <TableHead className="sticky top-0 bg-white z-20 text-center py-4">
                       વ્યાજ
                     </TableHead>
-                    <TableHead className="sticky top-0 bg-white z-20 text-center">
+                    <TableHead className="sticky top-0 bg-white z-20 text-center py-4">
                       દંડ
                     </TableHead>
-                    <TableHead className="sticky top-0 bg-white z-20 text-center">
+                    <TableHead className="sticky top-0 bg-white z-20 text-center py-4">
                       ઉપાડ જમા
                     </TableHead>
-                    <TableHead className="sticky top-0 bg-white z-20 text-center">
+                    <TableHead className="sticky top-0 bg-white z-20 text-center py-4">
                       નવો ઉપાડ
                     </TableHead>
-                    <TableHead className="sticky top-0 bg-white z-20 text-center">
+                    <TableHead className="sticky top-0 bg-white z-20 text-center py-4">
                       હપ્તો + વ્યાજ
                     </TableHead>
-                    <TableHead className="sticky top-0 bg-white z-20 text-center">
+                    <TableHead className="sticky top-0 bg-white z-20 text-center py-4">
                       Action
                     </TableHead>
                   </TableRow>
@@ -1510,38 +1523,38 @@ const handleSetHapto = async () => {
                 <TableBody>
                   {isTableLoading || isTableDataLoading ? (
                     Array.from({ length: 5 }).map((_, index) => (
-                      <TableRow key={`skeleton-${index}`}>
-                        <TableCell className="text-center sm:block">
+                      <TableRow key={`skeleton-${index}`} className="h-16">
+                        <TableCell className="text-center sm:block py-4">
                           <div className="h-5 w-5 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-center py-4">
                           <div className="h-5 w-8 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="py-4">
                           <div className="h-5 w-32 md:w-40 bg-gray-200/60 rounded animate-pulse"></div>
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-center py-4">
                           <div className="h-5 w-20 md:w-24 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-center py-4">
                           <div className="h-5 w-16 md:w-20 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-center py-4">
                           <div className="h-5 w-16 md:w-20 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-center py-4">
                           <div className="h-5 w-16 md:w-20 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-center py-4">
                           <div className="h-5 w-20 md:w-24 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-center py-4">
                           <div className="h-5 w-20 md:w-24 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-center py-4">
                           <div className="h-5 w-24 md:w-28 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-center py-4">
                           <div className="h-8 w-16 md:w-20 mx-auto bg-gray-200/60 rounded animate-pulse"></div>
                         </TableCell>
                       </TableRow>
@@ -1571,8 +1584,8 @@ const handleSetHapto = async () => {
                         (row.paidInstallment) >= requiredInstallment;
 
                       return (
-                        <TableRow key={row._id}>
-                          <TableCell className="text-center">
+                        <TableRow key={row._id} className="h-16">
+                          <TableCell className="text-center py-4">
                             <Checkbox
                               checked={isFullyPaid}
                               disabled={true}
@@ -1581,15 +1594,15 @@ const handleSetHapto = async () => {
                                   data-[state=checked]:border-green-600"
                             />
                           </TableCell>
-                          <TableCell className="text-center font-medium text-xs md:text-sm">
+                          <TableCell className="text-center font-medium text-xs md:text-sm py-4">
                             {index + 1}
                           </TableCell>
-                          <TableCell className="font-medium text-xs md:text-sm">
+                          <TableCell className="font-medium text-xs md:text-sm py-4">
                             <div className="flex items-center">
                               {row.subUser?.subUserName}
                             </div>
                           </TableCell>
-                          <TableCell className="text-center text-xs md:text-sm">
+                          <TableCell className="text-center text-xs md:text-sm py-4">
                             <div className="flex flex-col items-center">
                               {(() => {
                                 const installmentInfo = getDisplayInstallmentValue(row);
@@ -1610,7 +1623,7 @@ const handleSetHapto = async () => {
                               })()}
                             </div>
                           </TableCell>
-                          <TableCell className="text-center text-xs md:text-sm font-semibold">
+                          <TableCell className="text-center text-xs md:text-sm font-semibold py-4">
                             {carriedForwardAmount > 0 ? (
                               <div className="flex flex-col items-center">
                                 <span>
@@ -1630,44 +1643,47 @@ const handleSetHapto = async () => {
                               "-"
                             )}
                           </TableCell>
-                          <TableCell className="text-center text-xs md:text-sm">
+                          <TableCell className="text-center text-xs md:text-sm py-4">
                             <div className="flex flex-col items-center">
                               {(() => {
                                 const interestInfo = getDisplayInterestValue(row);
 
-                                return interestInfo.value > 0 ? (
+                                return (
                                   <>
-                                    <span>₹{interestInfo.value.toLocaleString()}</span>
+                                    <span>
+                                      {interestInfo.showDash
+                                        ? "-"
+                                        : `₹${interestInfo.value.toLocaleString()}`}
+                                    </span>
 
                                     {interestInfo.hasPending && (
                                       <span className="text-[10px] text-red-600 mt-0.5 font-medium">
-                                        (empty interest : {interestInfo.pendingAmount})
+                                        (empty interest : ₹{interestInfo.pendingAmount})
                                       </span>
                                     )}
                                   </>
-                                ) : (
-                                  "-"
                                 );
                               })()}
                             </div>
                           </TableCell>
-                          <TableCell className="text-center text-xs md:text-sm">
+                          <TableCell className="text-center text-xs md:text-sm py-4">
                             {row?.fine > 0 ? `₹${row?.fine}` : "-"}
                           </TableCell>
-                          <TableCell className="text-center text-xs md:text-sm">
+                          <TableCell className="text-center text-xs md:text-sm py-4">
                             {row?.paidWithdrawal > 0
                               ? `₹${row?.paidWithdrawal.toLocaleString()}`
                               : "-"}
                           </TableCell>
-                          <TableCell className="text-center text-xs md:text-sm">
+                          <TableCell className="text-center text-xs md:text-sm py-4">
                             {row?.newWithdrawal > 0
                               ? `₹${row?.newWithdrawal.toLocaleString()}`
                               : "-"}
                           </TableCell>
-                          <TableCell className="text-center font-medium text-xs md:text-sm">
+                          <TableCell className="text-center font-medium text-xs md:text-sm py-4">
                             {(row.paidInterest + row.paidInstallment).toLocaleString()}
                           </TableCell>
-                          <TableCell className="text-center">
+                          <TableCell className="text-center py-4">
+                            {!isPastMonth(selectedMonth) && (
                             <Button
                               variant="outline"
                               size="sm"
@@ -1686,7 +1702,7 @@ const handleSetHapto = async () => {
                               ) : (
                                 "Update"
                               )}
-                            </Button>
+                            </Button>) }  
                           </TableCell>
                         </TableRow>
                       );
@@ -1813,10 +1829,10 @@ const handleSetHapto = async () => {
               );
 
               const installmentInfo = getDisplayInstallmentValue(row);
-              const requiredInstallment = installmentInfo.value;
-
+              const interestInfo = getDisplayInterestValue(row);
+              
               const isFullyPaid =
-                (row.paidInstallment || 0) >= requiredInstallment;
+                (row.paidInstallment || 0) >= installmentInfo.value;
 
               return (
                 <div
@@ -1839,7 +1855,7 @@ const handleSetHapto = async () => {
                       "
                     />
                     <p className="font-semibold text-[11px] text-gray-500 truncate ml-2 flex-1">
-                      {row?.subUser?.subUserName}
+                      {index + 1}. {row?.subUser?.subUserName}
                     </p>
                   </div>
 
@@ -1847,11 +1863,10 @@ const handleSetHapto = async () => {
                     <div className="flex justify-between text-[10px] items-start">
                       <span className="text-gray-600">હપ્તો</span>
                       <div className="flex flex-col items-end leading-tight">
-                        <span>₹{getDisplayInstallmentValue(row).value.toLocaleString()}</span>
-
-                        {getDisplayInstallmentValue(row).hasPending && (
+                        <span>₹{installmentInfo.value.toLocaleString()}</span>
+                        {installmentInfo.hasPending && (
                           <span className="text-[9px] text-red-600 font-medium">
-                            (pending: ₹{getDisplayInstallmentValue(row).pendingAmount})
+                            (empty installment : ₹{installmentInfo.pendingAmount})
                           </span>
                         )}
                       </div>
@@ -1859,30 +1874,54 @@ const handleSetHapto = async () => {
 
                     <div className="flex justify-between text-[10px]">
                       <span className="text-gray-600">આ.નો ઉ.</span>
-                      <span className="font-semibold text-green-700">
-                        {row.withdrawal > 0 ? `₹${row.withdrawal.toLocaleString()}` : "-"}
-                      </span>
+                      <div className="flex flex-col items-end">
+                        {carriedForwardAmount > 0 ? (
+                          <>
+                            <span>₹{carriedForwardAmount.toLocaleString()}</span>
+                            {row.withdrawal > 0 &&
+                              row.withdrawal !== carriedForwardAmount && (
+                                <span className="text-[9px] text-gray-500">
+                                  (Updated: ₹{row.withdrawal?.toLocaleString()})
+                                </span>
+                              )}
+                          </>
+                        ) : row.withdrawal > 0 ? (
+                          <span>₹{row.withdrawal?.toLocaleString()}</span>
+                        ) : (
+                          <span>-</span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex justify-between text-[10px]">
                       <span className="text-gray-600">વ્યાજ</span>
-                      <span className="font-semibold text-green-700">
-                        {row.interest > 0 ? `₹${row.interest}` : "-"}
-                      </span>
+                      <div className="flex flex-col items-end">
+                        {interestInfo.value > 0 ? (
+                          <>
+                            <span>₹{interestInfo.value.toLocaleString()}</span>
+                            {interestInfo.hasPending && (
+                              <span className="text-[9px] text-red-600 font-medium">
+                                (empty interest : ₹{interestInfo.pendingAmount})
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span>-</span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex justify-between text-[10px]">
                       <span className="text-gray-600">દંડ</span>
                       <span className="font-semibold text-green-700">
-                        {row.fine > 0 ? `₹${row.fine}` : "-"}
+                        {row?.fine > 0 ? `₹${row?.fine}` : "-"}
                       </span>
                     </div>
-
                     <div className="flex justify-between text-[10px]">
                       <span className="text-gray-600">ઉપાડ જમા</span>
                       <span className="font-semibold text-green-700">
-                        {row.paidWithdrawal > 0
-                          ? `₹${row.paidWithdrawal.toLocaleString()}`
+                        {row?.paidWithdrawal > 0
+                          ? `₹${row?.paidWithdrawal.toLocaleString()}`
                           : "-"}
                       </span>
                     </div>
@@ -1890,16 +1929,15 @@ const handleSetHapto = async () => {
                     <div className="flex justify-between text-[10px]">
                       <span className="text-gray-600">નવો ઉપાડ</span>
                       <span className="font-semibold text-green-700">
-                        {row.newWithdrawal > 0
-                          ? `₹${row.newWithdrawal.toLocaleString()}`
+                        {row?.newWithdrawal > 0
+                          ? `₹${row?.newWithdrawal.toLocaleString()}`
                           : "-"}
                       </span>
                     </div>
-
                     <div className="flex justify-between text-[10px]">
                       <span className="text-gray-600">કુલ (હપ્તો+વ્યાજ)</span>
                       <span className="font-semibold text-green-700">
-                        {(row.installment + row.interest).toLocaleString()}
+                        {(row.paidInterest + row.paidInstallment).toLocaleString()}
                       </span>
                     </div>
                   </div>
@@ -1923,7 +1961,6 @@ const handleSetHapto = async () => {
                     )}
                   </Button>
                 </div>
-
               );
             })
           )}

@@ -135,7 +135,7 @@ export default function AnnualRecordPage() {
 
     const totalMembers = uniqueMemberIds.size;
 
-    const totalName = totalInstallments + totalWithdrawals;
+    const totalName = totalInstallments + totalInterest ;
     const bandSilak = totalName - totalNewWithdrawals;
     const Mandalcash = bandSilak;
 
@@ -512,6 +512,12 @@ const installmentAnalysis = useMemo(() => {
                       <span className="text-xs text-gray-500">ચૂકવેલ વ્યાજ</span>
                     </div>
                   </th>
+                  <th className="text-right py-3 px-4">
+                    <div className="flex flex-col items-end">
+                      <span className="font-medium">New Withdrawals</span>
+                      <span className="text-xs text-gray-500">ઉપાડ </span>
+                    </div>
+                  </th>
 
                   <th className="text-right py-3 px-4">
                     <div className="flex flex-col items-end">
@@ -521,7 +527,7 @@ const installmentAnalysis = useMemo(() => {
                   </th>
                   <th className="text-right py-3 px-4">
                       <div className="flex flex-col items-end">
-                    <span className="font-medium"> Band Silak </span>
+                    <span className="font-medium"> Bandh Silak </span>
                     <span className="text-xs text-gray-500">બેન્ડ સિલક</span>
                     </div>
                   </th>
@@ -542,6 +548,9 @@ const installmentAnalysis = useMemo(() => {
                     </td>
                     <td className="text-right py-3 px-4">
                       ₹{summary.interest.toLocaleString()}
+                    </td>
+                     <td className="text-right py-3 px-4">
+                      ₹{summary.newWithdrawals.toLocaleString()}
                     </td>
                     <td className="text-right py-3 px-4">
                       ₹{summary.withdrawals.toLocaleString()}
@@ -638,7 +647,7 @@ const installmentAnalysis = useMemo(() => {
               </div>
               <div className="flex justify-between items-center p-3 bg-green-100 rounded-lg border-2 border-green-200">
                 <span className="font-bold text-green-800 text-sm md:text-base">
-                  Band Silak ( શ્રી બંધ સિલક: )
+                  Bandh Silak ( શ્રી બંધ સિલક: )
                 </span>
                 <span className="font-bold text-lg md:text-xl text-green-800">
                   ₹{calculations.bandSilak.toLocaleString()}

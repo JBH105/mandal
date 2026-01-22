@@ -37,6 +37,39 @@ export async function createMandalSubUser(request: AuthenticatedRequest) {
       );
     }
 
+    const existingUsersCount = await MandalSubUser.countDocuments({
+      mandal: mandal._id,
+    });
+
+   
+    const withdrawalAggregation = await MemberData.aggregate([
+      {
+        $match: {
+          mandal: mandal._id,
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalNewWithdrawal: { $sum: "$newWithdrawal" },
+        },
+      },
+    ]);
+
+    const totalNewWithdrawal =
+      withdrawalAggregation[0]?.totalNewWithdrawal || 0;
+
+    const totalInterest = (totalNewWithdrawal * 1) / 100;
+
+    const totalUsersAfterAdd = existingUsersCount + 1;
+
+    const perUserPendingInterest =
+      totalUsersAfterAdd > 0
+        ? totalInterest / totalUsersAfterAdd
+        : 0;
+
+ 
+
     const subUser = await MandalSubUser.create({
       mandal: mandal._id,
       subUserName,
@@ -55,7 +88,6 @@ export async function createMandalSubUser(request: AuthenticatedRequest) {
       );
     }
 
-
     const previousMonths = await MandalMonth.find({
       mandal: mandal._id,
       month: { $lt: currentMonth.month },
@@ -71,8 +103,8 @@ export async function createMandalSubUser(request: AuthenticatedRequest) {
       subUser: subUser._id,
       monthId: currentMonth._id,
 
-      installment: currentMonth.monthlyInstallment, 
-      pendingInstallment,                            
+      installment: (currentMonth.monthlyInstallment + perUserPendingInterest || 0 ),
+      pendingInstallment,
       paidInstallment: 0,
 
       interest: 0,
@@ -102,6 +134,7 @@ export async function createMandalSubUser(request: AuthenticatedRequest) {
     );
   }
 }
+
 
 
 export async function getMandalSubUsers(request: AuthenticatedRequest) {
