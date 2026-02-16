@@ -2,6 +2,14 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { PageHeader } from "@/components/ui/page-header";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from "@/components/ui/table"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   getMandals,
@@ -488,97 +496,111 @@ const installmentAnalysis = useMemo(() => {
           </p>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  
-                  <th className="text-left py-3 px-4">
-                    <div className="flex flex-col">
+        <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>
+                  <div className="flex flex-col">
                     <span className="font-medium">Month</span>
                     <span className="text-xs text-gray-500"> મહિનાઓ</span>
-                    </div>
-                     </th>
-                  <th className="text-right py-3 px-4">
-                    <div className="flex flex-col items-end">
-                      <span className="font-medium">Paid Installments</span>
-                      <span className="text-xs text-gray-500">ચૂકવેલ હપ્તાઓ</span>
-                    </div>
-                  </th>
+                  </div>
+                </TableHead>
 
-                  <th className="text-right py-3 px-4">
-                    <div className="flex flex-col items-end">
-                      <span className="font-medium">Paid Interest</span>
-                      <span className="text-xs text-gray-500">ચૂકવેલ વ્યાજ</span>
-                    </div>
-                  </th>
-                  <th className="text-right py-3 px-4">
-                    <div className="flex flex-col items-end">
-                      <span className="font-medium">New Withdrawals</span>
-                      <span className="text-xs text-gray-500">ઉપાડ </span>
-                    </div>
-                  </th>
+                <TableHead className="text-right">
+                  <div className="flex flex-col items-end">
+                    <span className="font-medium">Paid Installments</span>
+                    <span className="text-xs text-gray-500">ચૂકવેલ હપ્તાઓ</span>
+                  </div>
+                </TableHead>
 
-                  <th className="text-right py-3 px-4">
-                    <div className="flex flex-col items-end">
-                      <span className="font-medium">Paid Withdrawals</span>
-                      <span className="text-xs text-gray-500">ચૂકવેલ ઉપાડ</span>
-                    </div>
-                  </th>
-                  <th className="text-right py-3 px-4">
-                      <div className="flex flex-col items-end">
-                    <span className="font-medium"> Bandh Silak </span>
+                <TableHead className="text-right">
+                  <div className="flex flex-col items-end">
+                    <span className="font-medium">Paid Interest</span>
+                    <span className="text-xs text-gray-500">ચૂકવેલ વ્યાજ</span>
+                  </div>
+                </TableHead>
+
+                <TableHead className="text-right">
+                  <div className="flex flex-col items-end">
+                    <span className="font-medium">New Withdrawals</span>
+                    <span className="text-xs text-gray-500">ઉપાડ</span>
+                  </div>
+                </TableHead>
+
+                <TableHead className="text-right">
+                  <div className="flex flex-col items-end">
+                    <span className="font-medium">Paid Withdrawals</span>
+                    <span className="text-xs text-gray-500">ચૂકવેલ ઉપાડ</span>
+                  </div>
+                </TableHead>
+
+                <TableHead className="text-right">
+                  <div className="flex flex-col items-end">
+                    <span className="font-medium">Bandh Silak</span>
                     <span className="text-xs text-gray-500">બેન્ડ સિલક</span>
-                    </div>
-                  </th>
+                  </div>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
 
-                </tr>
-              </thead>
-              <tbody>
-                {monthlySummaries.map((summary) => (
-                  <tr key={summary.month} className="border-b hover:bg-gray-50">
-                    <td className="py-3 px-4">
-                      {new Date(summary.month + '-01').toLocaleDateString('en-GB', {
-                        month: 'short',
-                        year: 'numeric'
-                      })}
-                    </td>
-                    <td className="text-right py-3 px-4">
-                      ₹{summary.installments.toLocaleString()}
-                    </td>
-                    <td className="text-right py-3 px-4">
-                      ₹{summary.interest.toLocaleString()}
-                    </td>
-                     <td className="text-right py-3 px-4">
-                      ₹{summary.newWithdrawals.toLocaleString()}
-                    </td>
-                    <td className="text-right py-3 px-4">
-                      ₹{summary.withdrawals.toLocaleString()}
-                    </td>
-                    <td className="text-right py-3 px-4 font-semibold">
-                      ₹{summary.bandSilak.toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-                {/* Total row */}
-                <tr className="bg-gray-50 font-bold">
-                  <td className="py-3 px-4">Annual Total</td>
-                  <td className="text-right py-3 px-4">
-                    ₹{calculations.totalInstallments.toLocaleString()}
-                  </td>
-                  <td className="text-right py-3 px-4">
-                    ₹{calculations.totalInterest.toLocaleString()}
-                  </td>
-                  <td className="text-right py-3 px-4">
-                    ₹{calculations.totalWithdrawals.toLocaleString()}
-                  </td>
-                  <td className="text-right py-3 px-4 text-green-700">
-                    ₹{calculations.bandSilak.toLocaleString()}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+            <TableBody>
+              {monthlySummaries.map((summary) => (
+                <TableRow key={summary.month}>
+                  <TableCell>
+                    {new Date(summary.month + "-01").toLocaleDateString("en-GB", {
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </TableCell>
+
+                  <TableCell className="text-right">
+                    ₹{summary.installments.toLocaleString()}
+                  </TableCell>
+
+                  <TableCell className="text-right">
+                    ₹{summary.interest.toLocaleString()}
+                  </TableCell>
+
+                  <TableCell className="text-right">
+                    ₹{summary.newWithdrawals.toLocaleString()}
+                  </TableCell>
+
+                  <TableCell className="text-right">
+                    ₹{summary.withdrawals.toLocaleString()}
+                  </TableCell>
+
+                  <TableCell className="text-right font-semibold">
+                    ₹{summary.bandSilak.toLocaleString()}
+                  </TableCell>
+                </TableRow>
+              ))}
+
+              {/* Annual Total Row */}
+              <TableRow className="bg-gray-50 font-bold">
+                <TableCell>Annual Total</TableCell>
+
+                <TableCell className="text-right">
+                  ₹{calculations.totalInstallments.toLocaleString()}
+                </TableCell>
+
+                <TableCell className="text-right">
+                  ₹{calculations.totalInterest.toLocaleString()}
+                </TableCell>
+
+                <TableCell className="text-right">
+                  ₹{calculations.totalNewWithdrawals.toLocaleString()}
+                </TableCell>
+
+                <TableCell className="text-right">
+                  ₹{calculations.totalWithdrawals.toLocaleString()}
+                </TableCell>
+
+                <TableCell className="text-right text-green-700">
+                  ₹{calculations.bandSilak.toLocaleString()}
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 

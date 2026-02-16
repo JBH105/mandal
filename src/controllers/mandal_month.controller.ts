@@ -33,8 +33,8 @@ type NewMemberDataPayload = {
 
   fine: number;
   total: number;
+  breakfastAmount?: number;
 };
-
 
 export async function getMonth(request: AuthenticatedRequest) {
   try {
@@ -319,7 +319,6 @@ export async function getMonth(request: AuthenticatedRequest) {
 //   }
 // }
 
-
 export async function addNewMonth(request: AuthenticatedRequest) {
   try {
     const authResult = await authMiddleware(request);
@@ -434,6 +433,7 @@ export async function addNewMonth(request: AuthenticatedRequest) {
         withdrawal,
         newWithdrawal: 0,
         paidWithdrawal: 0,
+        breakfastAmount: 0,
 
         fine: 0,
         total: 0,
@@ -458,3 +458,63 @@ export async function addNewMonth(request: AuthenticatedRequest) {
   }
 }
 
+// Add Extra Expense by Month ID
+export async function addExtraExpenseByMonth(
+  request: AuthenticatedRequest
+) {
+  try {
+    const authResult = await authMiddleware(request);
+    if (authResult) return authResult;
+
+    await connectToDB();
+
+    const { decoded } = request;
+    const body = await request.json();
+
+    const { monthId, extraExpense } = body;
+
+    if (!monthId || extraExpense === undefined || extraExpense < 0) {
+      return NextResponse.json(
+        { error: "monthId and valid extraExpense are required" },
+        { status: 400 }
+      );
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(monthId)) {
+      return NextResponse.json(
+        { error: "Invalid monthId" },
+        { status: 400 }
+      );
+    }
+
+    const month = await MandalMonth.findOne({
+      _id: monthId,
+      mandal: decoded!.id,
+    });
+
+    if (!month) {
+      return NextResponse.json(
+        { error: "Month not found" },
+        { status: 404 }
+      );
+    }
+
+    month.extraExpence = extraExpense;
+    await month.save();
+
+    return NextResponse.json(
+      {
+        message: "Extra expense updated successfully",
+        month: month.month,
+        extraExpense: month.extraExpence,
+      },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}

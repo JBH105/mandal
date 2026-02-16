@@ -113,7 +113,7 @@ export const setNewInstallmentApi = async (
 };
 
 
-export const getMonthApi = async (): Promise<{ _id: string; month: string ; monthlyInstallment: number; }[]> => {
+export const getMonthApi = async (): Promise<{ _id: string; month: string ; monthlyInstallment: number; extraExpence:number }[]> => {
   const response = await api.get("/month");
   return response.data;
 };
@@ -121,5 +121,18 @@ export const getMonthApi = async (): Promise<{ _id: string; month: string ; mont
 
 export const addNewMonthApi = async () => {
   const response = await api.post("/month");
+  return response.data;
+};
+
+
+export const setExtraExpenseApi = async (
+  monthId: string,
+  extraExpence: number
+) => {
+  const response = await api.post("/month/extra-expense", {
+    monthId,
+    extraExpense: Number(extraExpence),
+  });
+
   return response.data;
 };

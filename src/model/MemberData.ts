@@ -14,7 +14,8 @@ export interface IMemberData extends Document {
   pendingInstallment: number; 
   paidInstallment : number ;
   paidInterest?: number; 
-  pendingInterest: number;  
+  pendingInterest: number;
+  breakfastAmount?: number;  
 }
 
 const MemberDataSchema: Schema = new Schema({
@@ -36,6 +37,7 @@ const MemberDataSchema: Schema = new Schema({
   pendingInstallment: { type: Number, default: 0 }, 
   paidInstallment : { type: Number, default: 0 }, 
   pendingInterest: { type: Number, default: 0 },
+  breakfastAmount: { type: Number, default: 0 },
 });
 
 MemberDataSchema.virtual('formatted').get(function () {
@@ -52,6 +54,7 @@ MemberDataSchema.virtual('formatted').get(function () {
     'pendingInstallment',
     'paidInstallment',
     'pendingInterest',
+    'breakfastAmount',
   ];
 
   numericFields.forEach(field => {

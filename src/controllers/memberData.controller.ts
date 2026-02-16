@@ -35,6 +35,7 @@ export async function createMemberData(request: AuthenticatedRequest) {
       paidWithdrawal = 0,
       newWithdrawal = 0,
       fine = 0,
+      breakfastAmount = 0,
     } = body;
 
     const current = await MemberData.findById(_id);
@@ -110,6 +111,13 @@ export async function createMemberData(request: AuthenticatedRequest) {
     current.paidWithdrawal = Number(paidWithdrawal) || 0;
     current.newWithdrawal = Number(newWithdrawal) || 0;
     current.fine = Number(fine) || 0;
+    current.breakfastAmount = Number(breakfastAmount) || 0;
+    const breakfastAmt = Number(current.breakfastAmount) || 0;
+    current.total =
+      (current.paidInstallment || 0) +
+      (current.paidInterest || 0) +
+      (current.paidWithdrawal || 0) -
+      breakfastAmt;
 
     await current.save();
 
@@ -124,6 +132,8 @@ export async function createMemberData(request: AuthenticatedRequest) {
           interest: current.interest,
           pendingInterest: current.pendingInterest,
           paidInterest: current.paidInterest,
+          breakfastAmount: current.breakfastAmount,
+          total: current.total,
         },
       },
       { status: 200 }

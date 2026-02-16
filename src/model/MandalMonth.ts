@@ -4,6 +4,7 @@ export interface IMandalMonth extends Document {
   mandal: mongoose.Types.ObjectId;
   month: string;
   monthlyInstallment: number;
+  extraExpence : number ;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -23,6 +24,12 @@ const MandalMonthSchema: Schema = new Schema(
     monthlyInstallment: {
       type: Number,
       required: true,
+      default: 0,
+      min: 0,
+    },
+    extraExpence: {
+      type: Number,
+      required: false,
       default: 0,
       min: 0,
     },

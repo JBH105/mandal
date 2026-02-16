@@ -42,6 +42,7 @@ import {
   getMonthApi,
   addNewMonthApi,
   setNewInstallmentApi,
+  setExtraExpenseApi,
 } from "@/auth/auth";
 import { showErrorToast, showSuccessToast } from "@/middleware/lib/toast";
 import {
@@ -84,7 +85,8 @@ export default function AnalyticsPage() {
   const [filteredMemberData, setFilteredMemberData] = useState<MemberData[]>(
     []
   );
-  const [months, setMonths] = useState<{ _id: string; month: string; monthlyInstallment?: number }[]>([]);
+  const [months, setMonths] = useState<{ _id: string; month: string; monthlyInstallment?: number ; extraExpence?: number; }[]>([]);
+  const [selectedMonthExtraExpense, setSelectedMonthExtraExpense] = useState<number>(0);
   const [selectedMonth, setSelectedMonth] = useState<string>("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState<boolean>(false);
   const [formData, setFormData] = useState<FormData>({
@@ -134,6 +136,8 @@ export default function AnalyticsPage() {
     installment: 0,
     interest: 0,
   });
+  const [extraExpense, setExtraExpense] = useState("");
+  const [isExtraSubmitted, setIsExtraSubmitted] = useState(false);
   const isMobileLoading =
     (isDashboardLoading && !hasDataLoaded) ||
     isMonthLoading ||
@@ -224,6 +228,22 @@ export default function AnalyticsPage() {
         const data = await getMemberDataApi(monthId);
         setMemberData(data);
         setFilteredMemberData(data);
+
+        const found = months.find((m) => m.month === selectedMonth);
+
+        if (found) {
+          const value = found.extraExpence || 0;
+
+          setSelectedMonthExtraExpense(value);
+
+          if (value > 0) {
+            setExtraExpense(String(value));
+            setIsExtraSubmitted(true);
+          } else {
+            setExtraExpense("");
+            setIsExtraSubmitted(false);
+          }
+        }
 
       } catch (error) {
         console.error("Error fetching member data:", error);
@@ -351,12 +371,13 @@ export default function AnalyticsPage() {
       (sum, row) => sum + row.newWithdrawal,
       0
     );
-    const totalMembers = memberData.length;
-    const totalName = memberData.reduce((sum, row) => {
-      const paidInstallment = row.paidInstallment || 0;
-      const interestToAdd = row.paidInterest || 0;
-      return sum + paidInstallment + interestToAdd + (row.paidWithdrawal || 0);
-    }, 0);
+    const totalMembers = memberData?.length;
+
+    const totalNameBeforeExpense = memberData?.reduce((sum, row) => {
+    return sum + (row?.total || 0);
+  }, 0);
+
+ const totalName = totalNameBeforeExpense - (selectedMonthExtraExpense || 0);
 
     return {
       totalInstallments,
@@ -754,6 +775,42 @@ const handleSetHapto = async () => {
       });
     }
   };
+
+ const handleExtraKeyDown = async (e: any) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+
+    const monthId = getSelectedMonthObjectId();
+    if (!monthId) return;
+
+    if (!extraExpense || Number(extraExpense) <= 0) {
+      showErrorToast("Enter valid extra expense");
+      return;
+    }
+
+    try {
+      await setExtraExpenseApi(monthId, Number(extraExpense));
+
+      showSuccessToast("Extra expense updated!");
+
+      setMonths((prev) =>
+        prev.map((m) =>
+          m._id === monthId
+            ? { ...m, extraExpence: Number(extraExpense) }
+            : m
+        )
+      );
+
+      setIsExtraSubmitted(true);
+      setSelectedMonthExtraExpense(Number(extraExpense));
+
+    } catch (error) {
+      console.error(error);
+      showErrorToast("Failed to update extra expense");
+    }
+  }
+};
+
 
   if (isDashboardLoading && !hasDataLoaded) {
     return (
@@ -1450,6 +1507,22 @@ const handleSetHapto = async () => {
               </div>
             </div>
             <div className="flex items-center gap-4">
+  
+              {selectedMonthExtraExpense === 0 ? (
+                <Input
+                  type="number"
+                  placeholder="Enter extra Number"
+                  value={extraExpense}
+                  onChange={(e) => setExtraExpense(e.target.value)}
+                  onKeyDown={handleExtraKeyDown}
+                  className="w-48"
+                />
+              ) : (
+                <div className="w-35 text-sm font-medium">
+                  Extra Expense : ₹{selectedMonthExtraExpense}
+                </div>
+              )}
+
               <div className="relative hidden md:block">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
