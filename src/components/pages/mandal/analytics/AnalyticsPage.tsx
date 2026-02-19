@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef} from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -57,7 +57,6 @@ import { IoPersonAdd } from "react-icons/io5";
 import { TbTransactionRupee } from "react-icons/tb";
 import { exportLedgerPdf } from "@/utils/exportLedgerPdf";
 
-
 interface FormData {
   subUserId: string;
   installment: string;
@@ -77,6 +76,7 @@ export interface NewMemberForm {
 }
 
 export default function AnalyticsPage() {
+  const extraRef = useRef<HTMLDivElement>(null);
   const [mandalName, setMandalName] = useState<string>("આઈ શ્રી ખોડિયાર");
   const [establishedDate, setEstablishedDate] = useState<string | null>(null);
   const [mandalId, setMandalId] = useState<string | null>(null);
@@ -85,7 +85,9 @@ export default function AnalyticsPage() {
   const [filteredMemberData, setFilteredMemberData] = useState<MemberData[]>(
     []
   );
+
   const [months, setMonths] = useState<{ _id: string; month: string; monthlyInstallment?: number ; extraExpence?: number; }[]>([]);
+  const [allMonthsData, setAllMonthsData] = useState<any[]>([]);
   const [selectedMonthExtraExpense, setSelectedMonthExtraExpense] = useState<number>(0);
   const [selectedMonth, setSelectedMonth] = useState<string>("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState<boolean>(false);
@@ -137,7 +139,7 @@ export default function AnalyticsPage() {
     interest: 0,
   });
   const [extraExpense, setExtraExpense] = useState("");
-  const [isExtraSubmitted, setIsExtraSubmitted] = useState(false);
+  const [isEditingExtra, setIsEditingExtra] = useState(false);
   const isMobileLoading =
     (isDashboardLoading && !hasDataLoaded) ||
     isMonthLoading ||
@@ -235,14 +237,6 @@ export default function AnalyticsPage() {
           const value = found.extraExpence || 0;
 
           setSelectedMonthExtraExpense(value);
-
-          if (value > 0) {
-            setExtraExpense(String(value));
-            setIsExtraSubmitted(true);
-          } else {
-            setExtraExpense("");
-            setIsExtraSubmitted(false);
-          }
         }
 
       } catch (error) {
@@ -330,6 +324,31 @@ export default function AnalyticsPage() {
 
     fetchInitialData();
   }, []);
+
+  useEffect(() => {
+  const fetchAllMonthsData = async () => {
+    try {
+      const monthList = await getMonthApi();
+
+      const allData: any[] = [];
+
+      for (const monthObj of monthList) {
+        const data = await getMemberDataApi(monthObj._id);
+        allData.push({
+          month: monthObj.month,
+          data,
+        });
+      }
+
+      setAllMonthsData(allData);
+    } catch (error) {
+      console.error("Error fetching annual data:", error);
+    }
+  };
+
+  fetchAllMonthsData();
+}, []);
+
 
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -783,7 +802,7 @@ const handleSetHapto = async () => {
     const monthId = getSelectedMonthObjectId();
     if (!monthId) return;
 
-    if (!extraExpense || Number(extraExpense) <= 0) {
+    if (!extraExpense || Number(extraExpense) < 0) {
       showErrorToast("Enter valid extra expense");
       return;
     }
@@ -801,15 +820,91 @@ const handleSetHapto = async () => {
         )
       );
 
-      setIsExtraSubmitted(true);
       setSelectedMonthExtraExpense(Number(extraExpense));
-
+      setIsEditingExtra(false); 
     } catch (error) {
       console.error(error);
       showErrorToast("Failed to update extra expense");
     }
   }
 };
+
+useEffect(() => {
+  const handleClickOutside = (event: MouseEvent) => {
+    if (
+      isEditingExtra &&
+      extraRef.current &&
+      !extraRef.current.contains(event.target as Node)
+    ) {
+      setIsEditingExtra(false);
+      setExtraExpense("");
+    }
+  };
+
+  document.addEventListener("mousedown", handleClickOutside);
+  return () => {
+    document.removeEventListener("mousedown", handleClickOutside);
+  };
+}, [isEditingExtra]);
+
+const annualCalculations = useMemo(() => {
+  const allData = allMonthsData.flatMap((m) => m.data);
+
+  const uniqueMemberIds = new Set(
+    allData.map((row) => row.subUser?._id).filter(Boolean)
+  );
+
+  const totalInstallments = allData.reduce(
+    (sum, row) => sum + (row.paidInstallment || 0),
+    0
+  );
+
+  const totalInterest = allData.reduce(
+    (sum, row) => sum + (row.paidInterest || 0),
+    0
+  );
+
+  const totalWithdrawals = allData.reduce(
+    (sum, row) => sum + (row.paidWithdrawal || 0),
+    0
+  );
+
+  const totalNewWithdrawals = allData.reduce(
+    (sum, row) => sum + (row.newWithdrawal || 0),
+    0
+  );
+
+    const totalExtraExpense = months.reduce(
+  (sum, m) => sum + (m.extraExpence || 0),
+  0
+);
+
+  const totalMembers = uniqueMemberIds.size;
+
+  const totalName = totalInstallments + totalInterest;
+  const bandSilak = totalName - totalNewWithdrawals - totalExtraExpense;
+  const Mandalcash = bandSilak;
+
+  const interestPerPerson =
+    totalMembers > 0 ? totalInterest / totalMembers : 0;
+
+  const perPerson =
+    totalMembers > 0 ? bandSilak / totalMembers : 0;
+
+  return {
+    totalInstallments,
+    totalInterest,
+    totalWithdrawals,
+    totalNewWithdrawals,
+    totalMembers,
+    totalName,
+    bandSilak,
+    Mandalcash,
+    interestPerPerson,
+    perPerson,
+    totalExtraExpense,
+  };
+}, [allMonthsData]);
 
 
   if (isDashboardLoading && !hasDataLoaded) {
@@ -1506,23 +1601,44 @@ const handleSetHapto = async () => {
                 </Badge>
               </div>
             </div>
-            <div className="flex items-center gap-4">
-  
-              {selectedMonthExtraExpense === 0 ? (
-                <Input
-                  type="number"
-                  placeholder="Enter extra Number"
-                  value={extraExpense}
-                  onChange={(e) => setExtraExpense(e.target.value)}
-                  onKeyDown={handleExtraKeyDown}
-                  className="w-48"
-                />
-              ) : (
-                <div className="w-35 text-sm font-medium">
-                  Extra Expense : ₹{selectedMonthExtraExpense}
-                </div>
-              )}
+            <div  ref={extraRef} className="flex items-center gap-4">
+              <div className="flex items-center gap-4">
+                <span className="text-sm font-medium">
+                  Extra Expense :
+                </span>
 
+                {!isEditingExtra ? (
+                  <>
+                    <span className="text-sm font-semibold">
+                      ₹{selectedMonthExtraExpense || 0}
+                    </span>
+
+                  <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    setIsEditingExtra(true);
+                    setExtraExpense(selectedMonthExtraExpense.toString());
+                  }}
+                  className="h-8 w-8"
+                >
+                  <svg className="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                    <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m14.304 4.844 2.852 2.852M7 7H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-4.5m2.409-9.91a2.017 2.017 0 0 1 0 2.853l-6.844 6.844L8 14l.713-3.565 6.844-6.844a2.015 2.015 0 0 1 2.852 0Z"/>
+                  </svg>
+                </Button>
+
+                  </>
+                ) : (
+                  <Input
+                    type="number"
+                    value={extraExpense}
+                    onChange={(e) => setExtraExpense(e.target.value)}
+                    onKeyDown={handleExtraKeyDown}
+                    className="w-32"
+                    autoFocus
+                  />
+                )}
+              </div>
               <div className="relative hidden md:block">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
@@ -1544,6 +1660,7 @@ const handleSetHapto = async () => {
                     calculateCarriedForwardAmount,
                     getDisplayInstallmentValue,
                     getDisplayInterestValue,
+                    annualCalculations, 
                   })
                 }
               >
@@ -1791,7 +1908,7 @@ const handleSetHapto = async () => {
 
       <div className="md:hidden sticky top-0 z-30 bg-white px-4 py-2 flex items-center justify-between gap-3">
         {/* Search Bar */}
-        <div className="relative flex-1">
+        <div className="relative flex-1"> 
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
             type="search"
@@ -1817,6 +1934,45 @@ const handleSetHapto = async () => {
           </div>
         )}
       </div>
+      <div  ref={extraRef} className="lg:hidden flex items-center justify-center mt-2 gap-4">
+              <div className="flex items-center gap-4">
+                <span className="text-sm font-medium">
+                  Extra Expense :
+                </span>
+
+                {!isEditingExtra ? (
+                  <>
+                    <span className="text-sm font-semibold">
+                      ₹{selectedMonthExtraExpense || 0}
+                    </span>
+
+                  <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    setIsEditingExtra(true);
+                    setExtraExpense(selectedMonthExtraExpense.toString());
+                  }}
+                  className="h-8 w-8"
+                >
+                  <svg className="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                    <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m14.304 4.844 2.852 2.852M7 7H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-4.5m2.409-9.91a2.017 2.017 0 0 1 0 2.853l-6.844 6.844L8 14l.713-3.565 6.844-6.844a2.015 2.015 0 0 1 2.852 0Z"/>
+                  </svg>
+                </Button>
+
+                  </>
+                ) : (
+                  <Input
+                    type="number"
+                    value={extraExpense}
+                    onChange={(e) => setExtraExpense(e.target.value)}
+                    onKeyDown={handleExtraKeyDown}
+                    className="w-32"
+                    autoFocus
+                  />
+                )}
+              </div>
+              </div>
 
       <div
         className="md:block lg:block overflow-y-auto px-4"
@@ -2288,6 +2444,7 @@ const handleSetHapto = async () => {
                 calculateCarriedForwardAmount,
                 getDisplayInstallmentValue,
                 getDisplayInterestValue,
+                annualCalculations, 
               })
             }
             className="flex flex-col items-center text-xs px-3"

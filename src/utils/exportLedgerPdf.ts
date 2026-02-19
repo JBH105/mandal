@@ -7,6 +7,7 @@ export async function exportLedgerPdf({
   calculateCarriedForwardAmount,
   getDisplayInstallmentValue,
   getDisplayInterestValue,
+  annualCalculations,
 }: {
   mandalName: string;
   selectedMonth: string;
@@ -22,6 +23,7 @@ export async function exportLedgerPdf({
     hasPending: boolean;
     pendingAmount: number;
   };
+  annualCalculations: any;
 }) {
 
   const regularFont = await fetch("/fonts/NotoSansGujarati-Regular.ttf");
@@ -312,6 +314,160 @@ export async function exportLedgerPdf({
 
     content,
   };
+
+
+content.push({
+  text: "વાર્ષિક સારાંશ (Annual Financial Summary)",
+  fontSize: 12,
+  bold: true,
+  alignment: "center",
+  margin: [0, 25, 0, 15],
+});
+
+content.push({
+  table: {
+    widths: ["*"],
+    body: [
+      [
+        {
+          stack: [
+            {
+              text: "Total Members ( કુલ સભ્ય )",
+              bold: true,
+              fontSize: 10,
+              alignment: "center",
+            },
+            {
+              text: annualCalculations.totalMembers.toString(),
+              bold: true,
+              fontSize: 20,
+              alignment: "center",
+              margin: [0, 5, 0, 0],
+            },
+          ],
+        },
+      ],
+    ],
+  },
+  layout: "noBorders",
+  margin: [0, 0, 0, 20],
+});
+
+
+content.push({
+  columns: [
+    {
+      width: "50%",
+      table: {
+        widths: ["*", "auto"],
+        body: [
+          [
+            { text: "Total Installments ( કુલ હપ્તો )", bold: true },
+            {
+              text: `₹${annualCalculations.totalInstallments.toLocaleString()}`,
+              alignment: "right",
+            },
+          ],
+          [
+            { text: "Total Interest ( કુલ વ્યાજ )", bold: true },
+            {
+              text: `₹${annualCalculations.totalInterest.toLocaleString()}`,
+              alignment: "right",
+            },
+          ],
+          [
+            { text: "Total Withdrawals ( ઉપાડ જમા )", bold: true },
+            {
+              text: `₹${annualCalculations.totalWithdrawals.toLocaleString()}`,
+              alignment: "right",
+            },
+          ],
+          [
+            {
+              text: "Total ( કુલ રકમ )",
+              bold: true,
+              color: "#1d4ed8",
+            },
+            {
+              text: `₹${annualCalculations.totalName.toLocaleString()}`,
+              bold: true,
+              alignment: "right",
+              color: "#1d4ed8",
+            },
+          ],
+          [
+            { text: "New Withdrawals ( નવો ઉપાડ )", bold: true },
+            {
+              text: `₹${annualCalculations.totalNewWithdrawals.toLocaleString()}`,
+              alignment: "right",
+            },
+          ],
+        ],
+      },
+      layout: "",
+      margin: [0, 0, 15, 0],
+    },
+
+    /* ===== RIGHT SIDE ===== */
+    {
+      width: "50%",
+      table: {
+        widths: ["*", "auto"],
+        body: [
+          [
+            { text: "Extra Expense ( વધારાનો ખર્ચ )", bold: true },
+            {
+              text: `₹${annualCalculations.totalExtraExpense.toLocaleString()}`,
+              alignment: "right",
+            },
+          ],
+          [
+            {
+              text: "Bandh Silak ( શ્રી બંધ સિલક )",
+              bold: true,
+              color: "#166534",
+            },
+            {
+              text: `₹${annualCalculations.bandSilak.toLocaleString()}`,
+              bold: true,
+              alignment: "right",
+              color: "#166534",
+            },
+          ],
+          [
+            {
+              text: "Mandal's Cash ( મંડળની રોકડ )",
+              bold: true,
+              color: "#991b1b",
+            },
+            {
+              text: `₹${annualCalculations.Mandalcash.toLocaleString()}`,
+              bold: true,
+              alignment: "right",
+              color: "#991b1b",
+            },
+          ],
+          [
+            { text: "Per Person ( વ્યક્તિ દીઠ )", bold: true },
+            {
+              text: `₹${annualCalculations.perPerson.toFixed(2)}`,
+              alignment: "right",
+            },
+          ],
+          [
+            { text: "Interest Per Person ( વ્યક્તિ દીઠ વ્યાજ )", bold: true },
+            {
+              text: `₹${annualCalculations.interestPerPerson.toFixed(2)}`,
+              alignment: "right",
+            },
+          ],
+        ],
+      },
+      layout: "",
+    },
+  ],
+});
+
 
   const fileName = `${mandalName}_${selectedMonth}_Report.pdf`;
 

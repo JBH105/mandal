@@ -25,6 +25,7 @@ interface Month {
   _id: string;
   month: string;
   monthlyInstallment: number;
+  extraExpence:number;
 }
 
 interface Calculations {
@@ -38,6 +39,7 @@ interface Calculations {
   Mandalcash: number;
   interestPerPerson: number;
   perPerson: number;
+  totalExtraExpense: number;
 }
 
 interface SubUser {
@@ -140,13 +142,16 @@ export default function AnnualRecordPage() {
       (sum, row) => sum + (row.newWithdrawal || 0),
       0
     );
+     const totalExtraExpense = months.reduce(
+      (sum, m) => sum + (m.extraExpence || 0),
+      0
+    );
 
     const totalMembers = uniqueMemberIds.size;
 
     const totalName = totalInstallments + totalInterest ;
-    const bandSilak = totalName - totalNewWithdrawals;
+    const  bandSilak= totalName - totalNewWithdrawals - totalExtraExpense;
     const Mandalcash = bandSilak;
-
     const interestPerPerson =
       totalMembers > 0 ? totalInterest / totalMembers : 0;
     const perPerson = totalMembers > 0 ? bandSilak / totalMembers : 0;
@@ -162,6 +167,7 @@ export default function AnnualRecordPage() {
       Mandalcash,
       interestPerPerson,
       perPerson,
+      totalExtraExpense,
     };
   }, [allMonthsData]);
 
@@ -537,7 +543,7 @@ const installmentAnalysis = useMemo(() => {
                 <TableHead className="text-right">
                   <div className="flex flex-col items-end">
                     <span className="font-medium">Bandh Silak</span>
-                    <span className="text-xs text-gray-500">બેન્ડ સિલક</span>
+                    <span className="text-xs text-gray-500">બંધ સિલ્ક</span>
                   </div>
                 </TableHead>
               </TableRow>
@@ -667,9 +673,17 @@ const installmentAnalysis = useMemo(() => {
                   ₹{calculations.totalNewWithdrawals.toLocaleString()}
                 </span>
               </div>
+              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                <span className="font-medium text-sm md:text-base">
+                  Extra Expense ( વધારાનો ખર્ચ ):
+                </span>
+                <span className="font-bold text-sm md:text-base">
+                  ₹{(calculations.totalExtraExpense ?? 0).toLocaleString()}
+                </span>
+              </div>
               <div className="flex justify-between items-center p-3 bg-green-100 rounded-lg border-2 border-green-200">
                 <span className="font-bold text-green-800 text-sm md:text-base">
-                  Bandh Silak ( શ્રી બંધ સિલક: )
+                  Bandh Silak ( શ્રી બંધ સિલક ): 
                 </span>
                 <span className="font-bold text-lg md:text-xl text-green-800">
                   ₹{calculations.bandSilak.toLocaleString()}
