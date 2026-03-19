@@ -864,6 +864,11 @@ const annualCalculations = useMemo(() => {
     0
   );
 
+  const totalFine= allData.reduce(
+    (sum, row) => sum + (row.fine || 0),
+    0
+  );
+
   const totalWithdrawals = allData.reduce(
     (sum, row) => sum + (row.paidWithdrawal || 0),
     0
@@ -881,8 +886,8 @@ const annualCalculations = useMemo(() => {
 
   const totalMembers = uniqueMemberIds.size;
 
-  const totalName = totalInstallments + totalInterest;
-  const bandSilak = totalName - totalNewWithdrawals - totalExtraExpense;
+  const totalName = totalInstallments + totalInterest ;
+  const bandSilak = totalName - totalNewWithdrawals - totalExtraExpense + totalFine ;
   const Mandalcash = bandSilak;
 
   const interestPerPerson =
@@ -903,6 +908,7 @@ const annualCalculations = useMemo(() => {
     interestPerPerson,
     perPerson,
     totalExtraExpense,
+    totalFine,
   };
 }, [allMonthsData]);
 
@@ -1870,7 +1876,7 @@ const annualCalculations = useMemo(() => {
                               : "-"}
                           </TableCell>
                           <TableCell className="text-center font-medium text-xs md:text-sm py-4">
-                            {(row.paidInterest + row.paidInstallment).toLocaleString()}
+                            {(row?.total).toLocaleString()}
                           </TableCell>
                           <TableCell className="text-center py-4">
                             {!isPastMonth(selectedMonth) && (
@@ -2328,6 +2334,64 @@ const annualCalculations = useMemo(() => {
                             strokeLinejoin="round"
                             strokeWidth={2}
                             d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                          />
+                        </svg>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-purple-50 border-purple-200">
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-medium text-purple-600">
+                          કુલ દંડ
+                        </p>
+                        <p className="text-lg font-bold text-purple-800">
+                          ₹{calculations.totalFines.toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="h-6 w-6 bg-purple-100 rounded-full flex items-center justify-center">
+                        <svg
+                          className="h-3 w-3 text-purple-600"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                          />
+                        </svg>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-green-50 border-green-200">
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-medium text-green-600">
+                          વધારાના ખર્ચ
+                        </p>
+                        <p className="text-lg font-bold text-green-800">
+                          ₹{selectedMonthExtraExpense.toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="h-6 w-6 bg-orange-100 rounded-full flex items-center justify-center">
+                        <svg
+                          className="h-3 w-3 text-green-600"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M7 16l-4-4m0 0l4-4m-4 4h18"
                           />
                         </svg>
                       </div>

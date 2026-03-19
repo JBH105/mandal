@@ -9,7 +9,7 @@ import {
   TableHead,
   TableRow,
   TableCell,
-} from "@/components/ui/table"
+} from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   getMandals,
@@ -20,12 +20,11 @@ import {
 } from "@/auth/auth";
 import { HiOutlineUserGroup } from "react-icons/hi";
 
-
 interface Month {
   _id: string;
   month: string;
   monthlyInstallment: number;
-  extraExpence:number;
+  extraExpence: number;
 }
 
 interface Calculations {
@@ -40,6 +39,7 @@ interface Calculations {
   interestPerPerson: number;
   perPerson: number;
   totalExtraExpense: number;
+   totalFine: number;
 }
 
 interface SubUser {
@@ -54,14 +54,12 @@ interface AllMonthsData {
   data: MemberData[];
 }
 
-
 export default function AnnualRecordPage() {
   const [mandalName, setMandalName] = useState<string>("આઈ શ્રી ખોડિયાર");
   const [allMonthsData, setAllMonthsData] = useState<AllMonthsData[]>([]);
   const [months, setMonths] = useState<Month[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [uniqueMembers, setUniqueMembers] = useState<SubUser[]>([]);
-
 
   useEffect(() => {
     const fetchAllData = async () => {
@@ -79,7 +77,7 @@ export default function AnnualRecordPage() {
           ]);
 
           const filteredUsers = users.filter(
-            (user: SubUser) => user.mandal === currentMandalId
+            (user: SubUser) => user.mandal === currentMandalId,
           );
 
           setUniqueMembers(filteredUsers);
@@ -97,7 +95,7 @@ export default function AnnualRecordPage() {
             } catch (error) {
               console.error(
                 `Error fetching data for ${monthObj.month}:`,
-                error
+                error,
               );
             }
           }
@@ -115,42 +113,47 @@ export default function AnnualRecordPage() {
     fetchAllData();
   }, []);
 
-
   const calculations = useMemo<Calculations>(() => {
     const allData = allMonthsData.flatMap((m) => m.data);
 
     const uniqueMemberIds = new Set(
-      allData.map((row) => row.subUser?._id).filter(Boolean)
+      allData.map((row) => row.subUser?._id).filter(Boolean),
     );
 
     const totalInstallments = allData.reduce(
       (sum, row) => sum + (row.paidInstallment || 0),
-      0
+      0,
     );
 
     const totalInterest = allData.reduce(
       (sum, row) => sum + (row.paidInterest || 0),
-      0
+      0,
+    );
+    
+    const totalFine = allData.reduce(
+      (sum, row) => sum + (row.fine || 0),
+      0,
     );
 
     const totalWithdrawals = allData.reduce(
       (sum, row) => sum + (row.paidWithdrawal || 0),
-      0
+      0,
     );
 
     const totalNewWithdrawals = allData.reduce(
       (sum, row) => sum + (row.newWithdrawal || 0),
-      0
+      0,
     );
-     const totalExtraExpense = months.reduce(
+
+    const totalExtraExpense = months.reduce(
       (sum, m) => sum + (m.extraExpence || 0),
-      0
+      0,
     );
 
     const totalMembers = uniqueMemberIds.size;
 
-    const totalName = totalInstallments + totalInterest ;
-    const  bandSilak= totalName - totalNewWithdrawals - totalExtraExpense;
+    const totalName = totalInstallments + totalInterest;
+    const bandSilak = totalName - totalNewWithdrawals - totalExtraExpense + totalFine ;
     const Mandalcash = bandSilak;
     const interestPerPerson =
       totalMembers > 0 ? totalInterest / totalMembers : 0;
@@ -168,36 +171,46 @@ export default function AnnualRecordPage() {
       interestPerPerson,
       perPerson,
       totalExtraExpense,
+      totalFine,
     };
   }, [allMonthsData]);
-
 
   const monthlySummaries = useMemo(() => {
     return allMonthsData.map((monthData) => {
       const monthInstallments = monthData.data.reduce(
         (sum, row) => sum + (row.paidInstallment || 0),
-        0
+        0,
       );
 
       const monthInterest = monthData.data.reduce(
         (sum, row) => sum + (row.paidInterest || 0),
-        0
+        0,
       );
 
       const monthWithdrawals = monthData.data.reduce(
         (sum, row) => sum + (row.paidWithdrawal || 0),
-        0
+        0,
       );
 
       const monthNewWithdrawals = monthData.data.reduce(
         (sum, row) => sum + (row.newWithdrawal || 0),
-        0
+        0,
       );
+
+      const monthFine = monthData.data.reduce(
+        (sum, row) => sum + (row.fine || 0),
+        0,
+      );
+
+      const currentMonthObj = months.find((m) => m.month === monthData.month);
+
+      const monthExtraExpense = currentMonthObj?.extraExpence || 0;
 
       const monthTotalName =
         monthInstallments + monthInterest + monthWithdrawals;
 
-      const monthBandSilak = monthTotalName - monthNewWithdrawals;
+      const monthBandSilak =
+        monthTotalName - monthNewWithdrawals - monthExtraExpense + monthFine;
 
       return {
         month: monthData.month,
@@ -207,48 +220,44 @@ export default function AnnualRecordPage() {
         newWithdrawals: monthNewWithdrawals,
         totalName: monthTotalName,
         bandSilak: monthBandSilak,
+        monthExtraExpense: monthExtraExpense,
+        monthFine: monthFine,
       };
     });
   }, [allMonthsData]);
 
+  const installmentAnalysis = useMemo(() => {
+    const totalPossibleInstallments = months.reduce((sum, m) => {
+      return sum + (m.monthlyInstallment || 0) * uniqueMembers.length;
+    }, 0);
 
-const installmentAnalysis = useMemo(() => {
-  const totalPossibleInstallments = months.reduce((sum, m) => {
-    return sum + (m.monthlyInstallment || 0) * uniqueMembers.length;
-  }, 0);
+    const totalActualInstallments = calculations.totalInstallments;
 
-  const totalActualInstallments = calculations.totalInstallments;
+    const collectionPercentage =
+      totalPossibleInstallments > 0
+        ? (totalActualInstallments / totalPossibleInstallments) * 100
+        : 0;
 
-  const collectionPercentage =
-    totalPossibleInstallments > 0
-      ? (totalActualInstallments / totalPossibleInstallments) * 100
-      : 0;
-
-  const averageMonthlyInstallmentAmount =
-    months.length > 0
-      ? months.reduce((sum, m) => sum + (m.monthlyInstallment || 0), 0) /
-        months.length
-      : 0;
-
-  return {
-    totalPossibleInstallments,
-    totalActualInstallments,
-    collectionPercentage,
-    averageMonthlyInstallments:
+    const averageMonthlyInstallmentAmount =
       months.length > 0
-        ? totalActualInstallments / months.length
-        : 0,
-    averageMonthlyPerMember:
-      months.length > 0 && uniqueMembers.length > 0
-        ? totalActualInstallments / months.length / uniqueMembers.length
-        : 0,
+        ? months.reduce((sum, m) => sum + (m.monthlyInstallment || 0), 0) /
+          months.length
+        : 0;
 
-   
-    averageMonthlyInstallmentAmount,
-  };
-}, [months, uniqueMembers.length, calculations.totalInstallments]);
+    return {
+      totalPossibleInstallments,
+      totalActualInstallments,
+      collectionPercentage,
+      averageMonthlyInstallments:
+        months.length > 0 ? totalActualInstallments / months.length : 0,
+      averageMonthlyPerMember:
+        months.length > 0 && uniqueMembers.length > 0
+          ? totalActualInstallments / months.length / uniqueMembers.length
+          : 0,
 
-
+      averageMonthlyInstallmentAmount,
+    };
+  }, [months, uniqueMembers.length, calculations.totalInstallments]);
 
   if (isLoading) {
     return (
@@ -262,7 +271,10 @@ const installmentAnalysis = useMemo(() => {
         {/* Stats Cards Skeleton */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-lg border border-gray-200 p-5">
+            <div
+              key={i}
+              className="bg-white rounded-lg border border-gray-200 p-5"
+            >
               <div className="flex justify-between items-start mb-4">
                 <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
                 <div className="h-4 w-4 bg-gray-200 rounded-full animate-pulse" />
@@ -300,21 +312,33 @@ const installmentAnalysis = useMemo(() => {
             {/* Table Header */}
             <div className="grid grid-cols-5 gap-4">
               {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="h-4 bg-gray-200 rounded animate-pulse" />
+                <div
+                  key={i}
+                  className="h-4 bg-gray-200 rounded animate-pulse"
+                />
               ))}
             </div>
             {/* Table Rows */}
             {Array.from({ length: 5 }).map((_, rowIndex) => (
-              <div key={rowIndex} className="grid grid-cols-5 gap-4 py-4 border-b">
+              <div
+                key={rowIndex}
+                className="grid grid-cols-5 gap-4 py-4 border-b"
+              >
                 {Array.from({ length: 5 }).map((_, colIndex) => (
-                  <div key={colIndex} className={`h-4 bg-gray-200 rounded animate-pulse ${colIndex === 0 ? 'w-24' : 'w-16'}`} />
+                  <div
+                    key={colIndex}
+                    className={`h-4 bg-gray-200 rounded animate-pulse ${colIndex === 0 ? "w-24" : "w-16"}`}
+                  />
                 ))}
               </div>
             ))}
             {/* Total Row */}
             <div className="grid grid-cols-5 gap-4 py-4 bg-gray-50 rounded">
               {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="h-4 bg-gray-200 rounded animate-pulse" />
+                <div
+                  key={i}
+                  className="h-4 bg-gray-200 rounded animate-pulse"
+                />
               ))}
             </div>
           </div>
@@ -330,7 +354,10 @@ const installmentAnalysis = useMemo(() => {
             {Array.from({ length: 2 }).map((_, colIndex) => (
               <div key={colIndex} className="space-y-4">
                 {Array.from({ length: 5 }).map((_, rowIndex) => (
-                  <div key={rowIndex} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                  <div
+                    key={rowIndex}
+                    className="flex justify-between items-center p-3 bg-gray-50 rounded-lg"
+                  >
                     <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
                     <div className="h-4 w-20 bg-gray-200 rounded animate-pulse" />
                   </div>
@@ -340,7 +367,10 @@ const installmentAnalysis = useMemo(() => {
           </div>
           <div className="space-y-4 mt-6">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="flex justify-between items-center p-3 bg-gray-100 rounded-lg">
+              <div
+                key={i}
+                className="flex justify-between items-center p-3 bg-gray-100 rounded-lg"
+              >
                 <div className="h-4 w-40 bg-gray-200 rounded animate-pulse" />
                 <div className="h-6 w-24 bg-gray-200 rounded animate-pulse" />
               </div>
@@ -403,7 +433,9 @@ const installmentAnalysis = useMemo(() => {
               ₹{calculations.totalInstallments.toLocaleString()}
             </div>
             <p className="text-xs text-green-800">
-              Avg: ₹{installmentAnalysis.averageMonthlyInstallments.toLocaleString()}/month
+              Avg: ₹
+              {installmentAnalysis.averageMonthlyInstallments.toLocaleString()}
+              /month
             </p>
           </CardContent>
         </Card>
@@ -421,15 +453,15 @@ const installmentAnalysis = useMemo(() => {
             <div className="text-xl md:text-2xl font-bold">
               ₹{calculations.totalInterest.toLocaleString()}
             </div>
-            <p className="text-xs text-green-800">
-              Annual interest earned
-            </p>
+            <p className="text-xs text-green-800">Annual interest earned</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Annual Withdrawals</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Annual Withdrawals
+            </CardTitle>
             <div className="h-4 w-4 bg-red-100 rounded-full flex items-center justify-center">
               <span className="text-xs font-bold text-red-600">↓</span>
             </div>
@@ -438,9 +470,7 @@ const installmentAnalysis = useMemo(() => {
             <div className="text-xl md:text-2xl font-bold">
               ₹{calculations.totalWithdrawals.toLocaleString()}
             </div>
-            <p className="text-xs text-red-600">
-              Total withdrawals
-            </p>
+            <p className="text-xs text-red-600">Total withdrawals</p>
           </CardContent>
         </Card>
       </div>
@@ -458,32 +488,40 @@ const installmentAnalysis = useMemo(() => {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
-              <p className="text-sm font-medium text-gray-600">Possible Installments</p>
+              <p className="text-sm font-medium text-gray-600">
+                Possible Installments
+              </p>
               <p className="text-2xl font-bold">
-                ₹{installmentAnalysis.totalPossibleInstallments.toLocaleString()}
+                ₹
+                {installmentAnalysis.totalPossibleInstallments.toLocaleString()}
               </p>
               <p className="text-xs text-gray-500">
-                {uniqueMembers.length} members × {months.length} months × ₹{installmentAnalysis.averageMonthlyInstallmentAmount}
+                {uniqueMembers.length} members × {months.length} months × ₹
+                {installmentAnalysis.averageMonthlyInstallmentAmount}
               </p>
             </div>
             <div className="space-y-2">
-              <p className="text-sm font-medium text-gray-600">Actual Installments</p>
+              <p className="text-sm font-medium text-gray-600">
+                Actual Installments
+              </p>
               <p className="text-2xl font-bold">
                 ₹{installmentAnalysis.totalActualInstallments.toLocaleString()}
               </p>
-              <p className="text-xs text-gray-500">
-                Collected amount
-              </p>
+              <p className="text-xs text-gray-500">Collected amount</p>
             </div>
             <div className="space-y-2">
-              <p className="text-sm font-medium text-gray-600">Collection Rate</p>
+              <p className="text-sm font-medium text-gray-600">
+                Collection Rate
+              </p>
               <p className="text-2xl font-bold">
                 {installmentAnalysis.collectionPercentage.toFixed(1)}%
               </p>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-green-600 h-2 rounded-full" 
-                  style={{ width: `${Math.min(installmentAnalysis.collectionPercentage, 100)}%` }}
+                <div
+                  className="bg-green-600 h-2 rounded-full"
+                  style={{
+                    width: `${Math.min(installmentAnalysis.collectionPercentage, 100)}%`,
+                  }}
                 ></div>
               </div>
             </div>
@@ -494,15 +532,13 @@ const installmentAnalysis = useMemo(() => {
       {/* Monthly Breakdown Table */}
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle className="text-xl font-bold">
-            Monthly Breakdown
-          </CardTitle>
+          <CardTitle className="text-xl font-bold">Monthly Breakdown</CardTitle>
           <p className="text-sm text-gray-500">
             Month-by-month financial summary
           </p>
         </CardHeader>
         <CardContent>
-        <Table>
+          <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>
@@ -528,6 +564,13 @@ const installmentAnalysis = useMemo(() => {
 
                 <TableHead className="text-right">
                   <div className="flex flex-col items-end">
+                    <span className="font-medium">Fine</span>
+                    <span className="text-xs text-gray-500">દંડ</span>
+                  </div>
+                </TableHead>
+
+                <TableHead className="text-right">
+                  <div className="flex flex-col items-end">
                     <span className="font-medium">New Withdrawals</span>
                     <span className="text-xs text-gray-500">ઉપાડ</span>
                   </div>
@@ -537,6 +580,13 @@ const installmentAnalysis = useMemo(() => {
                   <div className="flex flex-col items-end">
                     <span className="font-medium">Paid Withdrawals</span>
                     <span className="text-xs text-gray-500">ચૂકવેલ ઉપાડ</span>
+                  </div>
+                </TableHead>
+
+                <TableHead className="text-right">
+                  <div className="flex flex-col items-end">
+                    <span className="font-medium">Extra Expence</span>
+                    <span className="text-xs text-gray-500">વધારાનો ખર્ચો</span>
                   </div>
                 </TableHead>
 
@@ -553,10 +603,13 @@ const installmentAnalysis = useMemo(() => {
               {monthlySummaries.map((summary) => (
                 <TableRow key={summary.month}>
                   <TableCell>
-                    {new Date(summary.month + "-01").toLocaleDateString("en-GB", {
-                      month: "short",
-                      year: "numeric",
-                    })}
+                    {new Date(summary.month + "-01").toLocaleDateString(
+                      "en-GB",
+                      {
+                        month: "short",
+                        year: "numeric",
+                      },
+                    )}
                   </TableCell>
 
                   <TableCell className="text-right">
@@ -568,11 +621,19 @@ const installmentAnalysis = useMemo(() => {
                   </TableCell>
 
                   <TableCell className="text-right">
+                    ₹{summary.monthFine.toLocaleString()}
+                  </TableCell>
+
+                  <TableCell className="text-right">
                     ₹{summary.newWithdrawals.toLocaleString()}
                   </TableCell>
 
                   <TableCell className="text-right">
                     ₹{summary.withdrawals.toLocaleString()}
+                  </TableCell>
+
+                  <TableCell className="text-right">
+                    ₹{summary.monthExtraExpense.toLocaleString()}
                   </TableCell>
 
                   <TableCell className="text-right font-semibold">
@@ -594,11 +655,19 @@ const installmentAnalysis = useMemo(() => {
                 </TableCell>
 
                 <TableCell className="text-right">
+                  ₹{calculations.totalFine.toLocaleString()}
+                </TableCell>
+
+                <TableCell className="text-right">
                   ₹{calculations.totalNewWithdrawals.toLocaleString()}
                 </TableCell>
 
                 <TableCell className="text-right">
                   ₹{calculations.totalWithdrawals.toLocaleString()}
+                </TableCell>
+
+                <TableCell className="text-right">
+                  ₹{calculations.totalExtraExpense.toLocaleString()}
                 </TableCell>
 
                 <TableCell className="text-right text-green-700">
@@ -617,7 +686,8 @@ const installmentAnalysis = useMemo(() => {
             {mandalName} - મંડળ વાર્ષિક સારાંશ
           </CardTitle>
           <p className="text-sm text-gray-500">
-            Comprehensive annual financial summary (Total {months.length} months)
+            Comprehensive annual financial summary (Total {months.length}{" "}
+            months)
           </p>
         </CardHeader>
         <CardContent>
@@ -667,6 +737,14 @@ const installmentAnalysis = useMemo(() => {
             <div className="space-y-3">
               <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                 <span className="font-medium text-sm md:text-base">
+                    Total Fine (કુલ દંડ):
+                </span>
+                <span className="font-bold text-sm md:text-base">
+                  ₹{calculations.totalFine.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                <span className="font-medium text-sm md:text-base">
                   New Withdrawals ( નવો ઉપાડ ):
                 </span>
                 <span className="font-bold text-sm md:text-base">
@@ -683,7 +761,7 @@ const installmentAnalysis = useMemo(() => {
               </div>
               <div className="flex justify-between items-center p-3 bg-green-100 rounded-lg border-2 border-green-200">
                 <span className="font-bold text-green-800 text-sm md:text-base">
-                  Bandh Silak ( શ્રી બંધ સિલક ): 
+                  Bandh Silak ( શ્રી બંધ સિલક ):
                 </span>
                 <span className="font-bold text-lg md:text-xl text-green-800">
                   ₹{calculations.bandSilak.toLocaleString()}
@@ -726,39 +804,7 @@ const installmentAnalysis = useMemo(() => {
         </CardContent>
       </Card>
 
-      {/* Additional Annual Summary Information */}
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Annual Performance Overview</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <h4 className="font-medium mb-2">Monthly Average Collection</h4>
-                <p className="text-2xl font-bold text-green-800">
-                  ₹{installmentAnalysis.averageMonthlyInstallments.toLocaleString()}
-                </p>
-                <p className="text-sm text-gray-500">Per month average</p>
-              </div>
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <h4 className="font-medium mb-2">Per Member Monthly</h4>
-                <p className="text-2xl font-bold text-blue-600">
-                  ₹{installmentAnalysis.averageMonthlyPerMember.toLocaleString()}
-                </p>
-                <p className="text-sm text-gray-500">Average per member per month</p>
-              </div>
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <h4 className="font-medium mb-2">Withdrawal Rate</h4>
-                <p className="text-2xl font-bold text-orange-600">
-                  {((calculations.totalWithdrawals / Math.max(calculations.totalInstallments, 1)) * 100).toFixed(1)}%
-                </p>
-                <p className="text-sm text-gray-500">Of total collection</p>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+   
     </>
   );
 }

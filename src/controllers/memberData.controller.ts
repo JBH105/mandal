@@ -116,7 +116,8 @@ export async function createMemberData(request: AuthenticatedRequest) {
     current.total =
       (current.paidInstallment || 0) +
       (current.paidInterest || 0) +
-      (current.paidWithdrawal || 0) -
+      (current.paidWithdrawal || 0) +
+      (current.fine) -
       breakfastAmt;
 
     await current.save();

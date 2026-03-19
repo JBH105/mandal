@@ -103,12 +103,12 @@ export async function createMandalSubUser(request: AuthenticatedRequest) {
       subUser: subUser._id,
       monthId: currentMonth._id,
 
-      installment: (currentMonth.monthlyInstallment + perUserPendingInterest || 0 ),
-      pendingInstallment,
+      installment: currentMonth.monthlyInstallment || 0,
+      pendingInstallment: pendingInstallment ,
       paidInstallment: 0,
 
       interest: 0,
-      pendingInterest: 0,
+      pendingInterest: perUserPendingInterest,
       paidInterest: 0,
 
       withdrawal: 0,

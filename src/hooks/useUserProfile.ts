@@ -55,8 +55,6 @@ export function useUserProfile() {
         // Get role from token
         const role = getRoleFromToken();
         setUserRole(role);
-        console.log("🚀 ~ Role from token:", role);
-
         // Check if user is authenticated (has token)
         const token = sessionStorage.getItem('token') || localStorage.getItem('token');
         setIsAuthenticated(!!token);

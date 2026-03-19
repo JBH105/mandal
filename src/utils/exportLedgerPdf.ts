@@ -65,7 +65,7 @@ export async function exportLedgerPdf({
     totalFine += row.fine || 0;
     totalPaidWithdrawal += row.paidWithdrawal || 0;
     totalNewWithdrawal += row.newWithdrawal || 0;
-    grandTotal += (row.paidInstallment || 0) + (row.paidInterest || 0);
+    grandTotal += (row?.total)
     
     if (installmentInfo.hasPending) totalPending += installmentInfo.pendingAmount;
     if (interestInfo.hasPending) totalPending += interestInfo.pendingAmount;
@@ -152,7 +152,7 @@ export async function exportLedgerPdf({
             {
               stack: [
                 { text: "કુલ સભ્યો", fontSize: 8, color: "#666666", alignment: "center" },
-                { text: rows.length.toString(), fontSize: 18, bold: true, color: "#2a2a2a", alignment: "center", margin: [0, 1, 0, 0] },
+                { text: annualCalculations.totalMembers.toString(), fontSize: 18, bold: true, color: "#2a2a2a", alignment: "center", margin: [0, 1, 0, 0] },
               ],
               fillColor: "#ffffff",
               margin: [0, 4, 0, 4],
@@ -161,7 +161,7 @@ export async function exportLedgerPdf({
             {
               stack: [
                 { text: "કુલ હપ્તો", fontSize: 8, color: "#666666", alignment: "center" },
-                { text: `₹${totalInstallment}`, fontSize: 18, bold: true, color: "#2a2a2a", alignment: "center", margin: [0, 1, 0, 0] },
+                { text: `₹${grandTotal}`, fontSize: 18, bold: true, color: "#2a2a2a", alignment: "center", margin: [0, 1, 0, 0] },
               ],
               fillColor: "#ffffff",
               margin: [0, 4, 0, 4],
@@ -178,8 +178,8 @@ export async function exportLedgerPdf({
 
             {
               stack: [
-                { text: "કુલ યોગ", fontSize: 8, color: "#666666", alignment: "center" },
-                { text: `₹${grandTotal}`, fontSize: 18, bold: true, color: "#2a2a2a", alignment: "center", margin: [0, 1, 0, 0] },
+                { text: "કુલ દંડ", fontSize: 8, color: "#666666", alignment: "center" },
+                { text: `₹${totalFine}`, fontSize: 18, bold: true, color: "#2a2a2a", alignment: "center", margin: [0, 1, 0, 0] },
               ],
               fillColor: "#ffffff",
               margin: [0, 4, 0, 4],
@@ -201,68 +201,7 @@ export async function exportLedgerPdf({
     },
 
 
-    {
-      columns: [
-      {
-          width: "*",
-          table: {
-            widths: ["*"],
-            body: [
-              [
-                {
-                  text: [
-                    { text: "કુલ દંડ : ", fontSize: 8, color: "#666666" },
-                    { text: ` ${totalFine}`, fontSize: 9, bold: true, color: "#2a2a2a" },
-                  ],
-                  margin: [4, 0, 4, 0],
-                },
-              ],
-            ],
-          },
-          layout: "noBorders",
-          margin: [0, 0, 3, 0],
-        },
-        {
-          width: "*",
-          table: {
-            widths: ["*"],
-            body: [
-              [
-                {
-                  text: [
-                    { text: "કુલ પેન્ડિંગ: ", fontSize: 8, color: "#666666" },
-                    { text: ` ${totalPending}`, fontSize: 9, bold: true, color: "#2a2a2a" },
-                  ],
-                  margin: [4, 0, 4, 0],
-                },
-              ],
-            ],
-          },
-          layout: "noBorders",
-          margin: [0, 0, 3, 0],
-        },
-        {
-          width: "*",
-          table: {
-            widths: ["*"],
-            body: [
-              [
-                {
-                  text: [
-                    { text: "આગળનો ઉધાર: ", fontSize: 8, color: "#666666" },
-                    { text: ` ${totalCarriedForward}`, fontSize: 9, bold: true, color: "#2a2a2a" },
-                  ],
-                  margin: [4, 0, 4, 0],
-                },
-              ],
-            ],
-          },
-          layout: "noBorders",
-        }
-      ],
-      margin: [0, 0, 0, 2],
-    },
-
+  
 
 
     {
@@ -383,6 +322,20 @@ content.push({
             },
           ],
           [
+            { text: "New Withdrawals ( નવો ઉપાડ )", bold: true },
+            {
+              text: `₹${annualCalculations.totalNewWithdrawals.toLocaleString()}`,
+              alignment: "right",
+            },
+          ],
+          [
+            { text: "Fine ( દંડ )", bold: true },
+            {
+              text: `₹${annualCalculations.totalFine.toLocaleString()}`,
+              alignment: "right",
+            },
+          ],
+          [
             {
               text: "Total ( કુલ રકમ )",
               bold: true,
@@ -393,13 +346,6 @@ content.push({
               bold: true,
               alignment: "right",
               color: "#1d4ed8",
-            },
-          ],
-          [
-            { text: "New Withdrawals ( નવો ઉપાડ )", bold: true },
-            {
-              text: `₹${annualCalculations.totalNewWithdrawals.toLocaleString()}`,
-              alignment: "right",
             },
           ],
         ],
