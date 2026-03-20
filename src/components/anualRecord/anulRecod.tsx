@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import {
   Table,
@@ -11,14 +10,8 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  getMandals,
-  getMandalSubUsersApi,
-  getMemberDataApi,
-  getMonthApi,
-  MemberData,
-} from "@/auth/auth";
 import { HiOutlineUserGroup } from "react-icons/hi";
+import { MemberData } from "@/auth/auth";
 
 interface Month {
   _id: string;
@@ -54,346 +47,165 @@ interface AllMonthsData {
   data: MemberData[];
 }
 
-export default function AnnualRecordPage() {
-  const [mandalName, setMandalName] = useState<string>("આઈ શ્રી ખોડિયાર");
-  const [allMonthsData, setAllMonthsData] = useState<AllMonthsData[]>([]);
-  const [months, setMonths] = useState<Month[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [uniqueMembers, setUniqueMembers] = useState<SubUser[]>([]);
+export default function AnnualRecord({
+  initialMandalName = "આઈ શ્રી ખોડિયાર",
+  initialAllMonthsData = [],
+  initialMonths = [],
+  initialUniqueMembers = [],
+}: {
+  initialMandalName?: string;
+  initialAllMonthsData?: AllMonthsData[];
+  initialMonths?: Month[];
+  initialUniqueMembers?: SubUser[];
+}) {
+  // Since data comes from SSR, we don't need state or loading
+  const mandalName = initialMandalName;
+  const allMonthsData = initialAllMonthsData;
+  const months = initialMonths;
+  const uniqueMembers = initialUniqueMembers;
+  console.log("🚀 ~ AnnualRecord ~ uniqueMembers:", uniqueMembers)
 
-  useEffect(() => {
-    const fetchAllData = async () => {
-      try {
-        setIsLoading(true);
+  // Direct calculations without useMemo since props don't change in client
+  const allData = allMonthsData.flatMap((m) => m.data);
 
-        const mandals = await getMandals();
-        if (mandals.length > 0) {
-          setMandalName(mandals[0].nameGu);
-          const currentMandalId = mandals[0]._id;
+  const uniqueMemberIds = new Set(
+    allData.map((row) => row.subUser?._id).filter(Boolean),
+  );
 
-          const [users, monthList] = await Promise.all([
-            getMandalSubUsersApi(),
-            getMonthApi(),
-          ]);
+  const totalInstallments = allData.reduce(
+    (sum, row) => sum + (row.paidInstallment || 0),
+    0,
+  );
 
-          const filteredUsers = users.filter(
-            (user: SubUser) => user.mandal === currentMandalId,
-          );
+  const totalInterest = allData.reduce(
+    (sum, row) => sum + (row.paidInterest || 0),
+    0,
+  );
+  
+  const totalFine = allData.reduce(
+    (sum, row) => sum + (row.fine || 0),
+    0,
+  );
 
-          setUniqueMembers(filteredUsers);
-          setMonths(monthList);
+  const totalWithdrawals = allData.reduce(
+    (sum, row) => sum + (row.paidWithdrawal || 0),
+    0,
+  );
 
-          const allMonthData: AllMonthsData[] = [];
+  const totalNewWithdrawals = allData.reduce(
+    (sum, row) => sum + (row.newWithdrawal || 0),
+    0,
+  );
 
-          for (const monthObj of monthList) {
-            try {
-              const data: MemberData[] = await getMemberDataApi(monthObj._id);
-              allMonthData.push({
-                month: monthObj.month,
-                data,
-              });
-            } catch (error) {
-              console.error(
-                `Error fetching data for ${monthObj.month}:`,
-                error,
-              );
-            }
-          }
+  const totalExtraExpense = months.reduce(
+    (sum, m) => sum + (m.extraExpence || 0),
+    0,
+  );
 
-          setAllMonthsData(allMonthData);
-        }
-      } catch (error) {
-        console.error("Error fetching initial data:", error);
-        setMandalName("Error Loading Mandal");
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const totalMembers = uniqueMemberIds.size;
 
-    fetchAllData();
-  }, []);
+  const totalName = totalInstallments + totalInterest + totalFine;
+  const bandSilak = totalName - totalNewWithdrawals - totalExtraExpense;
+  const Mandalcash = bandSilak;
+  const interestPerPerson =
+    totalMembers > 0 ? totalInterest / totalMembers : 0;
+  const perPerson = totalMembers > 0 ? bandSilak / totalMembers : 0;
 
-  const calculations = useMemo<Calculations>(() => {
-    const allData = allMonthsData.flatMap((m) => m.data);
+  const calculations: Calculations = {
+    totalInstallments,
+    totalInterest,
+    totalWithdrawals,
+    totalNewWithdrawals,
+    totalMembers,
+    totalName,
+    bandSilak,
+    Mandalcash,
+    interestPerPerson,
+    perPerson,
+    totalExtraExpense,
+    totalFine,
+  };
 
-    const uniqueMemberIds = new Set(
-      allData.map((row) => row.subUser?._id).filter(Boolean),
-    );
-
-    const totalInstallments = allData.reduce(
+  // Direct monthly summaries without useMemo
+  const monthlySummaries = allMonthsData.map((monthData) => {
+    const monthInstallments = monthData.data.reduce(
       (sum, row) => sum + (row.paidInstallment || 0),
       0,
     );
 
-    const totalInterest = allData.reduce(
+    const monthInterest = monthData.data.reduce(
       (sum, row) => sum + (row.paidInterest || 0),
       0,
     );
-    
-    const totalFine = allData.reduce(
-      (sum, row) => sum + (row.fine || 0),
-      0,
-    );
 
-    const totalWithdrawals = allData.reduce(
+    const monthWithdrawals = monthData.data.reduce(
       (sum, row) => sum + (row.paidWithdrawal || 0),
       0,
     );
 
-    const totalNewWithdrawals = allData.reduce(
+    const monthNewWithdrawals = monthData.data.reduce(
       (sum, row) => sum + (row.newWithdrawal || 0),
       0,
     );
 
-    const totalExtraExpense = months.reduce(
-      (sum, m) => sum + (m.extraExpence || 0),
+    const monthFine = monthData.data.reduce(
+      (sum, row) => sum + (row.fine || 0),
       0,
     );
 
-    const totalMembers = uniqueMemberIds.size;
+    const currentMonthObj = months.find((m) => m.month === monthData.month);
 
-    const totalName = totalInstallments + totalInterest;
-    const bandSilak = totalName - totalNewWithdrawals - totalExtraExpense + totalFine ;
-    const Mandalcash = bandSilak;
-    const interestPerPerson =
-      totalMembers > 0 ? totalInterest / totalMembers : 0;
-    const perPerson = totalMembers > 0 ? bandSilak / totalMembers : 0;
+    const monthExtraExpense = currentMonthObj?.extraExpence || 0;
 
-    return {
-      totalInstallments,
-      totalInterest,
-      totalWithdrawals,
-      totalNewWithdrawals,
-      totalMembers,
-      totalName,
-      bandSilak,
-      Mandalcash,
-      interestPerPerson,
-      perPerson,
-      totalExtraExpense,
-      totalFine,
-    };
-  }, [allMonthsData]);
+    const monthTotalName =
+      monthInstallments + monthInterest + monthWithdrawals;
 
-  const monthlySummaries = useMemo(() => {
-    return allMonthsData.map((monthData) => {
-      const monthInstallments = monthData.data.reduce(
-        (sum, row) => sum + (row.paidInstallment || 0),
-        0,
-      );
-
-      const monthInterest = monthData.data.reduce(
-        (sum, row) => sum + (row.paidInterest || 0),
-        0,
-      );
-
-      const monthWithdrawals = monthData.data.reduce(
-        (sum, row) => sum + (row.paidWithdrawal || 0),
-        0,
-      );
-
-      const monthNewWithdrawals = monthData.data.reduce(
-        (sum, row) => sum + (row.newWithdrawal || 0),
-        0,
-      );
-
-      const monthFine = monthData.data.reduce(
-        (sum, row) => sum + (row.fine || 0),
-        0,
-      );
-
-      const currentMonthObj = months.find((m) => m.month === monthData.month);
-
-      const monthExtraExpense = currentMonthObj?.extraExpence || 0;
-
-      const monthTotalName =
-        monthInstallments + monthInterest + monthWithdrawals;
-
-      const monthBandSilak =
-        monthTotalName - monthNewWithdrawals - monthExtraExpense + monthFine;
-
-      return {
-        month: monthData.month,
-        installments: monthInstallments,
-        interest: monthInterest,
-        withdrawals: monthWithdrawals,
-        newWithdrawals: monthNewWithdrawals,
-        totalName: monthTotalName,
-        bandSilak: monthBandSilak,
-        monthExtraExpense: monthExtraExpense,
-        monthFine: monthFine,
-      };
-    });
-  }, [allMonthsData]);
-
-  const installmentAnalysis = useMemo(() => {
-    const totalPossibleInstallments = months.reduce((sum, m) => {
-      return sum + (m.monthlyInstallment || 0) * uniqueMembers.length;
-    }, 0);
-
-    const totalActualInstallments = calculations.totalInstallments;
-
-    const collectionPercentage =
-      totalPossibleInstallments > 0
-        ? (totalActualInstallments / totalPossibleInstallments) * 100
-        : 0;
-
-    const averageMonthlyInstallmentAmount =
-      months.length > 0
-        ? months.reduce((sum, m) => sum + (m.monthlyInstallment || 0), 0) /
-          months.length
-        : 0;
+    const monthBandSilak =
+      monthTotalName - monthNewWithdrawals - monthExtraExpense + monthFine;
 
     return {
-      totalPossibleInstallments,
-      totalActualInstallments,
-      collectionPercentage,
-      averageMonthlyInstallments:
-        months.length > 0 ? totalActualInstallments / months.length : 0,
-      averageMonthlyPerMember:
-        months.length > 0 && uniqueMembers.length > 0
-          ? totalActualInstallments / months.length / uniqueMembers.length
-          : 0,
-
-      averageMonthlyInstallmentAmount,
+      month: monthData.month,
+      installments: monthInstallments,
+      interest: monthInterest,
+      withdrawals: monthWithdrawals,
+      newWithdrawals: monthNewWithdrawals,
+      totalName: monthTotalName,
+      bandSilak: monthBandSilak,
+      monthExtraExpense: monthExtraExpense,
+      monthFine: monthFine,
     };
-  }, [months, uniqueMembers.length, calculations.totalInstallments]);
+  });
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6 md:space-y-8 p-4 md:p-6">
-        {/* Header Skeleton */}
-        <div className="space-y-3">
-          <div className="h-8 w-64 md:w-80 bg-gray-200 rounded animate-pulse" />
-          <div className="h-4 w-72 md:w-96 bg-gray-200 rounded animate-pulse" />
-        </div>
+  // Direct installment analysis without useMemo
+  const totalPossibleInstallments = months.reduce((sum, m) => {
+    return sum + (m.monthlyInstallment || 0) * uniqueMembers.length;
+  }, 0);
 
-        {/* Stats Cards Skeleton */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div
-              key={i}
-              className="bg-white rounded-lg border border-gray-200 p-5"
-            >
-              <div className="flex justify-between items-start mb-4">
-                <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
-                <div className="h-4 w-4 bg-gray-200 rounded-full animate-pulse" />
-              </div>
-              <div className="h-8 w-20 bg-gray-200 rounded animate-pulse mb-2" />
-              <div className="h-3 w-32 bg-gray-200 rounded animate-pulse" />
-            </div>
-          ))}
-        </div>
+  const totalActualInstallments = calculations.totalInstallments;
 
-        {/* Installment Analysis Skeleton */}
-        <div className="bg-white rounded-lg border border-gray-200 p-5">
-          <div className="space-y-3 mb-6">
-            <div className="h-6 w-48 bg-gray-200 rounded animate-pulse" />
-            <div className="h-4 w-64 bg-gray-200 rounded animate-pulse" />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="space-y-3">
-                <div className="h-4 w-36 bg-gray-200 rounded animate-pulse" />
-                <div className="h-8 w-32 bg-gray-200 rounded animate-pulse" />
-                <div className="h-3 w-48 bg-gray-200 rounded animate-pulse" />
-              </div>
-            ))}
-          </div>
-        </div>
+  const collectionPercentage =
+    totalPossibleInstallments > 0
+      ? (totalActualInstallments / totalPossibleInstallments) * 100
+      : 0;
 
-        {/* Monthly Breakdown Table Skeleton */}
-        <div className="bg-white rounded-lg border border-gray-200 p-5">
-          <div className="space-y-3 mb-6">
-            <div className="h-6 w-48 bg-gray-200 rounded animate-pulse" />
-            <div className="h-4 w-64 bg-gray-200 rounded animate-pulse" />
-          </div>
-          <div className="space-y-4">
-            {/* Table Header */}
-            <div className="grid grid-cols-5 gap-4">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-4 bg-gray-200 rounded animate-pulse"
-                />
-              ))}
-            </div>
-            {/* Table Rows */}
-            {Array.from({ length: 5 }).map((_, rowIndex) => (
-              <div
-                key={rowIndex}
-                className="grid grid-cols-5 gap-4 py-4 border-b"
-              >
-                {Array.from({ length: 5 }).map((_, colIndex) => (
-                  <div
-                    key={colIndex}
-                    className={`h-4 bg-gray-200 rounded animate-pulse ${colIndex === 0 ? "w-24" : "w-16"}`}
-                  />
-                ))}
-              </div>
-            ))}
-            {/* Total Row */}
-            <div className="grid grid-cols-5 gap-4 py-4 bg-gray-50 rounded">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-4 bg-gray-200 rounded animate-pulse"
-                />
-              ))}
-            </div>
-          </div>
-        </div>
+  const averageMonthlyInstallmentAmount =
+    months.length > 0
+      ? months.reduce((sum, m) => sum + (m.monthlyInstallment || 0), 0) /
+        months.length
+      : 0;
 
-        {/* Detailed Breakdown Skeleton */}
-        <div className="bg-white rounded-lg border border-gray-200 p-5">
-          <div className="space-y-3 mb-6">
-            <div className="h-6 w-64 bg-gray-200 rounded animate-pulse" />
-            <div className="h-4 w-72 bg-gray-200 rounded animate-pulse" />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-            {Array.from({ length: 2 }).map((_, colIndex) => (
-              <div key={colIndex} className="space-y-4">
-                {Array.from({ length: 5 }).map((_, rowIndex) => (
-                  <div
-                    key={rowIndex}
-                    className="flex justify-between items-center p-3 bg-gray-50 rounded-lg"
-                  >
-                    <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
-                    <div className="h-4 w-20 bg-gray-200 rounded animate-pulse" />
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-          <div className="space-y-4 mt-6">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div
-                key={i}
-                className="flex justify-between items-center p-3 bg-gray-100 rounded-lg"
-              >
-                <div className="h-4 w-40 bg-gray-200 rounded animate-pulse" />
-                <div className="h-6 w-24 bg-gray-200 rounded animate-pulse" />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Annual Performance Overview Skeleton */}
-        <div className="bg-white rounded-lg border border-gray-200 p-5">
-          <div className="h-6 w-48 bg-gray-200 rounded animate-pulse mb-6" />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="p-4 bg-gray-50 rounded-lg space-y-3">
-                <div className="h-4 w-36 bg-gray-200 rounded animate-pulse" />
-                <div className="h-8 w-28 bg-gray-200 rounded animate-pulse" />
-                <div className="h-3 w-40 bg-gray-200 rounded animate-pulse" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const installmentAnalysis = {
+    totalPossibleInstallments,
+    totalActualInstallments,
+    collectionPercentage,
+    averageMonthlyInstallments:
+      months.length > 0 ? totalActualInstallments / months.length : 0,
+    averageMonthlyPerMember:
+      months.length > 0 && uniqueMembers.length > 0
+        ? totalActualInstallments / months.length / uniqueMembers.length
+        : 0,
+    averageMonthlyInstallmentAmount,
+  };
 
   return (
     <>

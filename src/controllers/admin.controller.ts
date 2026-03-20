@@ -44,7 +44,17 @@ export async function login(request: Request) {
       { expiresIn: "24h" }
     );
 
-    return NextResponse.json({ message: "Login successful", token }, { status: 200 });
+    const response = NextResponse.json({ message: "Login successful", token }, { status: 200 });
+    
+    // Set cookie for Server-Side Rendering
+    response.cookies.set("auth_token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 60 * 60 * 24, // 24 hours
+      path: "/",
+    });
+
+    return response;
   } catch (error: unknown) {
     console.error("Error logging in:", error);
     

@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect, useMemo, useRef} from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -51,7 +52,12 @@ import {
   formatPhoneNumber,
   ValidationErrors,
 } from "./validation";
-import { SkeletonCard, SkeletonTable, Loader, SkeletonMobileCard } from "@/components/ui/loader";
+import {
+  SkeletonCard,
+  SkeletonTable,
+  Loader,
+  SkeletonMobileCard,
+} from "@/components/ui/loader";
 import { MobileFooter } from "@/components/ui/mobile-footer";
 import { IoPersonAdd } from "react-icons/io5";
 import { TbTransactionRupee } from "react-icons/tb";
@@ -75,21 +81,64 @@ export interface NewMemberForm {
   phoneNumber: string;
 }
 
-export default function AnalyticsPage() {
+export default function AnalyticsPage({
+  initialMandals = [],
+  initialSubUsers = [],
+  initialMonths = [],
+  initialMemberData = [],
+  initialSelectedMonth = "",
+  selectallMonthsData = [],
+}: {
+  initialMandals?: any[];
+  initialSubUsers?: any[];
+  initialMonths?: any[];
+  initialMemberData?: any[];
+  initialSelectedMonth?: string;
+  selectallMonthsData?: any[];
+}) {
+  const [isActionLoading, setIsActionLoading] = useState(false);
+  const router = useRouter();
   const extraRef = useRef<HTMLDivElement>(null);
-  const [mandalName, setMandalName] = useState<string>("આઈ શ્રી ખોડિયાર");
-  const [establishedDate, setEstablishedDate] = useState<string | null>(null);
-  const [mandalId, setMandalId] = useState<string | null>(null);
-  const [subUsers, setSubUsers] = useState<SubUser[]>([]);
-  const [memberData, setMemberData] = useState<MemberData[]>([]);
-  const [filteredMemberData, setFilteredMemberData] = useState<MemberData[]>(
-    []
+  const currentMandal = initialMandals?.[0] || null;
+  const [mandalName, setMandalName] = useState<string>(
+    currentMandal?.nameGu || "No Mandal Found",
   );
+  const [establishedDate, setEstablishedDate] = useState<string | null>(
+    currentMandal?.establishedDate || null,
+  );
+  const [mandalId, setMandalId] = useState<string | null>(
+    currentMandal?._id || null,
+  );
+  const [subUsers, setSubUsers] = useState<SubUser[]>(initialSubUsers);
 
-  const [months, setMonths] = useState<{ _id: string; month: string; monthlyInstallment?: number ; extraExpence?: number; }[]>([]);
-  const [allMonthsData, setAllMonthsData] = useState<any[]>([]);
-  const [selectedMonthExtraExpense, setSelectedMonthExtraExpense] = useState<number>(0);
-  const [selectedMonth, setSelectedMonth] = useState<string>("");
+  // Directly hydrate state from SSR props instead of an empty array!
+  const [memberData, setMemberData] = useState<MemberData[]>(initialMemberData);
+  const [filteredMemberData, setFilteredMemberData] =
+    useState<MemberData[]>(initialMemberData);
+
+  const [months, setMonths] = useState<
+    {
+      _id: string;
+      month: string;
+      monthlyInstallment?: number;
+      extraExpence?: number;
+    }[]
+  >(initialMonths || []);
+  const [allMonthsData, setAllMonthsData] = useState(selectallMonthsData);
+
+  // Hydrate extra expense for the selected month natively
+  const [selectedMonthExtraExpense, setSelectedMonthExtraExpense] =
+    useState<number>(() => {
+      const found = (initialMonths || []).find(
+        (m) => m.month === initialSelectedMonth,
+      );
+      return found?.extraExpence || 0;
+    });
+
+  // Initialize default selected month based on SSR props
+  const [selectedMonth, setSelectedMonth] =
+    useState<string>(initialSelectedMonth);
+
   const [isAddDialogOpen, setIsAddDialogOpen] = useState<boolean>(false);
   const [formData, setFormData] = useState<FormData>({
     subUserId: "",
@@ -115,20 +164,22 @@ export default function AnalyticsPage() {
     subUserName: boolean;
     phoneNumber: boolean;
   }>({ subUserName: false, phoneNumber: false });
-  const [isDashboardLoading, setIsDashboardLoading] = useState(true);
+  const [isDashboardLoading, setIsDashboardLoading] = useState(false);
   const [isAddingMonth, setIsAddingMonth] = useState<boolean>(false);
   const [isTableLoading, setIsTableLoading] = useState<boolean>(false);
   const [isTableDataLoading, setIsTableDataLoading] = useState<boolean>(false);
   const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
   const [isAddingMember, setIsAddingMember] = useState<boolean>(false);
-  const [hasDataLoaded, setHasDataLoaded] = useState<boolean>(false);
+  const [hasDataLoaded, setHasDataLoaded] = useState<boolean>(true); // Already loaded from SSR
   const [previousMonthData, setPreviousMonthData] = useState<MemberData[]>([]);
   const [mandalMonthlyInstallment, setMandalMonthlyInstallment] =
-    useState<number>(0);
+    useState<number>(currentMandal?.setInstallment || 0);
   const [isHaptoDialogOpen, setIsHaptoDialogOpen] = useState<boolean>(false);
   const [haptoValue, setHaptoValue] = useState<string>("");
   const [isInstallmentPaid, setIsInstallmentPaid] = useState<boolean>(true);
-  const [isHaptoSet, setIsHaptoSet] = useState<boolean>(false);
+  const [isHaptoSet, setIsHaptoSet] = useState<boolean>(
+    (currentMandal?.setInstallment || 0) > 0,
+  );
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isAddMonthDialogOpen, setIsAddMonthDialogOpen] =
     useState<boolean>(false);
@@ -145,8 +196,6 @@ export default function AnalyticsPage() {
     isMonthLoading ||
     isTableDataLoading;
 
-
-
   const getSelectedMonthObjectId = (): string | null => {
     if (!selectedMonth) return null;
     const found = months.find((m) => m.month === selectedMonth);
@@ -157,7 +206,6 @@ export default function AnalyticsPage() {
     const found = months.find((m) => m.month === selectedMonth);
     return found?.monthlyInstallment ?? null;
   };
-
 
   const getDisplayInstallmentValue = (row: MemberData) => {
     const installment =
@@ -179,21 +227,20 @@ export default function AnalyticsPage() {
   };
 
   const getDisplayInterestValue = (row: MemberData) => {
-   const interest = row.interest || 0;
-  const paid = row.paidInterest || 0;
-  const pending = row.pendingInterest || 0;
+    const interest = row.interest || 0;
+    const paid = row.paidInterest || 0;
+    const pending = row.pendingInterest || 0;
 
-  const showDash = interest === 0;
+    const showDash = interest === 0;
 
-  const displayValue =
-    paid === 0 || paid === interest ? interest : paid;
+    const displayValue = paid === 0 || paid === interest ? interest : paid;
 
-  return {
-    value: displayValue,   // ✅ ALWAYS number
-    showDash,              // ✅ UI-only flag
-    hasPending: pending > 0,
-    pendingAmount: pending,
-  };
+    return {
+      value: displayValue, // ✅ ALWAYS number
+      showDash, // ✅ UI-only flag
+      hasPending: pending > 0,
+      pendingAmount: pending,
+    };
   };
 
   const getCurrentMonth = () => {
@@ -206,149 +253,26 @@ export default function AnalyticsPage() {
   const isPastMonth = (selectedMonth: string) => {
     if (!selectedMonth || months.length === 0) return true;
 
-    const mandalCurrentMonth = months[0].month; 
+    const mandalCurrentMonth = months[0].month;
     const selected = new Date(selectedMonth + "-01");
     const current = new Date(mandalCurrentMonth + "-01");
 
-    return selected < current; 
+    return selected < current;
   };
 
-
   useEffect(() => {
-    if (!selectedMonth || months.length === 0) return;
+    setSubUsers(initialSubUsers || []);
+    setMonths(initialMonths || []);
+    setMemberData(initialMemberData || []);
+    setFilteredMemberData(initialMemberData || []);
+    setAllMonthsData(selectallMonthsData || []);
 
-    const fetchMemberDataForMonth = async () => {
-      try {
-        setIsTableDataLoading(true);
-
-        const monthId = getSelectedMonthObjectId();
-        if (!monthId) {
-          showErrorToast("Month ID not found");
-          return;
-        }
-
-        const data = await getMemberDataApi(monthId);
-        setMemberData(data);
-        setFilteredMemberData(data);
-
-        const found = months.find((m) => m.month === selectedMonth);
-
-        if (found) {
-          const value = found.extraExpence || 0;
-
-          setSelectedMonthExtraExpense(value);
-        }
-
-      } catch (error) {
-        console.error("Error fetching member data:", error);
-        showErrorToast("Failed to load member data");
-      } finally {
-        setIsTableDataLoading(false);
-      }
-    };
-
-    fetchMemberDataForMonth();
-  }, [selectedMonth, months]);
-
-  useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        setIsDashboardLoading(true);
-
-        const mandals = await getMandals();
-        if (mandals.length === 0) {
-          setMandalName("No Mandal Found");
-          setHasDataLoaded(true);
-          return;
-        }
-
-        const currentMandal = mandals[0];
-        setMandalName(currentMandal.nameGu);
-        setEstablishedDate(currentMandal.establishedDate);
-        setMandalId(currentMandal._id);
-
-        const backendInstallment = currentMandal.setInstallment || 0;
-        setMandalMonthlyInstallment(backendInstallment);
-        setIsHaptoSet(backendInstallment > 0);
-
-        const [users, monthResponse] = await Promise.all([
-          getMandalSubUsersApi(),
-          getMonthApi(),
-        ]);
-
-        setSubUsers(users);
-
-        const monthObjects = Array.isArray(monthResponse)
-          ? monthResponse
-            .filter((m) => m && m._id && m.month)
-            .sort((a, b) => {
-              const da = new Date(a.month + "-01");
-              const db = new Date(b.month + "-01");
-              return db.getTime() - da.getTime();
-            })
-          : [];
-
-        setMonths(monthObjects);
-
-        if (monthObjects.length > 0) {
-          const defaultMonthName = monthObjects[0].month;
-          const defaultMonthId = monthObjects[0]._id;
-
-          setSelectedMonth(defaultMonthName);
-
-
-          const data = await getMemberDataApi(defaultMonthId);
-          setMemberData(data);
-          setFilteredMemberData(data);
-
-
-          setHasDataLoaded(true);
-        } else {
-          setMonths([]);
-          setSelectedMonth("");
-          setMemberData([]);
-          setFilteredMemberData([]);
-          setHasDataLoaded(true);
-          showSuccessToast(
-            "Welcome to your new mandal! Start by adding your first member."
-          );
-        }
-      } catch (error) {
-        console.error("Error fetching initial data:", error);
-        setMandalName("Error Loading Mandal");
-        setHasDataLoaded(true);
-      } finally {
-        setIsDashboardLoading(false);
-      }
-    };
-
-    fetchInitialData();
-  }, []);
-
-  useEffect(() => {
-  const fetchAllMonthsData = async () => {
-    try {
-      const monthList = await getMonthApi();
-
-      const allData: any[] = [];
-
-      for (const monthObj of monthList) {
-        const data = await getMemberDataApi(monthObj._id);
-        allData.push({
-          month: monthObj.month,
-          data,
-        });
-      }
-
-      setAllMonthsData(allData);
-    } catch (error) {
-      console.error("Error fetching annual data:", error);
-    }
-  };
-
-  fetchAllMonthsData();
-}, []);
-
+    const found = (initialMonths || []).find(
+      (m) => m.month === initialSelectedMonth,
+    );
+    setSelectedMonthExtraExpense(found?.extraExpence || 0);
+    setSelectedMonth(initialSelectedMonth);
+  }, [initialMemberData, initialSelectedMonth, initialMonths, initialSubUsers]);
 
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -359,44 +283,41 @@ export default function AnalyticsPage() {
     const query = searchQuery.toLowerCase();
 
     const filtered = memberData.filter((item) =>
-      item.subUser?.subUserName
-        ?.toLowerCase()
-        .includes(query)
+      item.subUser?.subUserName?.toLowerCase().includes(query),
     );
 
     setFilteredMemberData(filtered);
   }, [searchQuery, memberData]);
 
-
   const calculations = useMemo(() => {
     const totalInstallments = memberData.reduce(
       (sum, row) => sum + (row.paidInstallment || 0),
-      0
+      0,
     );
     const totalAmount = memberData.reduce(
       (sum, row) => sum + row.paidWithdrawal,
-      0
+      0,
     );
     const totalInterest = memberData.reduce(
       (sum, row) => sum + row.paidInterest,
-      0
+      0,
     );
     const totalFines = memberData.reduce((sum, row) => sum + row.fine, 0);
     const totalWithdrawals = memberData.reduce(
       (sum, row) => sum + row.paidWithdrawal,
-      0
+      0,
     );
     const totalNewWithdrawals = memberData.reduce(
       (sum, row) => sum + row.newWithdrawal,
-      0
+      0,
     );
     const totalMembers = memberData?.length;
 
     const totalNameBeforeExpense = memberData?.reduce((sum, row) => {
-    return sum + (row?.total || 0);
-  }, 0);
+      return sum + (row?.total || 0);
+    }, 0);
 
- const totalName = totalNameBeforeExpense - (selectedMonthExtraExpense || 0);
+    const totalName = totalNameBeforeExpense - (selectedMonthExtraExpense || 0);
 
     return {
       totalInstallments,
@@ -417,7 +338,7 @@ export default function AnalyticsPage() {
 
     const previousMonthId = months[currentIndex + 1]._id;
     const previousData = previousMonthData.find(
-      (data) => data.subUser._id === memberId
+      (data) => data.subUser._id === memberId,
     );
     if (!previousData) return 0;
 
@@ -453,11 +374,11 @@ export default function AnalyticsPage() {
       setIsTableDataLoading(true);
 
       const cleanPhoneNumber = cleanPhoneNumberForPayload(
-        newMemberData.phoneNumber
+        newMemberData.phoneNumber,
       );
 
       const phoneNumberExists = subUsers.some(
-        (user) => user.phoneNumber === cleanPhoneNumber
+        (user) => user.phoneNumber === cleanPhoneNumber,
       );
       if (phoneNumberExists) {
         showErrorToast("This phone number is already registered");
@@ -478,19 +399,10 @@ export default function AnalyticsPage() {
 
       showSuccessToast("Member created successfully!");
 
-      const users = await getMandalSubUsersApi();
-      setSubUsers(users);
-
-      // ✅ ID પાસ કરીને ડેટા refresh કરો
-      const monthIdForRefresh = getSelectedMonthObjectId();
-      if (monthIdForRefresh) {
-        const updatedData = await getMemberDataApi(monthIdForRefresh);
-        setMemberData(updatedData);
-        setFilteredMemberData(updatedData);
-      }
-
       setNewMemberData({ subUserName: "", phoneNumber: "" });
       setIsAddMemberDialogOpen(false);
+
+      router.refresh();
     } catch (error) {
       console.error("Error creating member:", error);
       showErrorToast("Failed to create member");
@@ -518,7 +430,7 @@ export default function AnalyticsPage() {
       const totalPaid = parseFloat(formData.installment) || 0;
 
       const currentMemberRecord = memberData.find(
-        (item) => item.subUser._id === formData.subUserId
+        (item) => item.subUser._id === formData.subUserId,
       );
 
       if (!currentMemberRecord) {
@@ -541,10 +453,6 @@ export default function AnalyticsPage() {
 
       showSuccessToast("Member data updated successfully!");
 
-      const updatedData = await getMemberDataApi(monthId);
-      setMemberData(updatedData);
-      setFilteredMemberData(updatedData);
-
       setFormData({
         subUserId: "",
         installment: "",
@@ -560,6 +468,8 @@ export default function AnalyticsPage() {
 
       setSelectedMemberName("");
       setIsAddDialogOpen(false);
+
+      router.refresh();
     } catch (error) {
       console.error("Error updating member data:", error);
       showErrorToast("Failed to update member data");
@@ -568,47 +478,37 @@ export default function AnalyticsPage() {
     }
   };
 
-const handleSetHapto = async () => {
-  try {
-    const monthId = getSelectedMonthObjectId();
-    if (!monthId) {
-      showErrorToast("Month not found");
-      return;
+  const handleSetHapto = async () => {
+    try {
+      const monthId = getSelectedMonthObjectId();
+      if (!monthId) {
+        showErrorToast("Month not found");
+        return;
+      }
+
+      if (!haptoValue || Number(haptoValue) <= 0) {
+        showErrorToast("Please enter valid hapto value");
+        return;
+      }
+
+      setIsMonthLoading(true);
+
+      await setNewInstallmentApi(monthId, Number(haptoValue));
+
+      showSuccessToast("Hapto set successfully!");
+      setIsHaptoSet(true);
+
+      setHaptoValue("");
+      setIsHaptoDialogOpen(false);
+
+      router.refresh();
+    } catch (error) {
+      console.error("Error setting hapto:", error);
+      showErrorToast("Failed to set hapto");
+    } finally {
+      setIsMonthLoading(false);
     }
-
-    if (!haptoValue || Number(haptoValue) <= 0) {
-      showErrorToast("Please enter valid hapto value");
-      return;
-    }
-
-    setIsMonthLoading(true);
-
-    await setNewInstallmentApi(monthId, Number(haptoValue));
-    setMonths((prev) =>
-      prev.map((m) =>
-        m._id === monthId
-          ? { ...m, monthlyInstallment: Number(haptoValue) }
-          : m
-      )
-    );
-
-    showSuccessToast("Hapto set successfully!");
-    setIsHaptoSet(true);
-
-    const updatedData = await getMemberDataApi(monthId);
-    setMemberData(updatedData);
-    setFilteredMemberData(updatedData);
-
-    setHaptoValue("");
-    setIsHaptoDialogOpen(false);
-  } catch (error) {
-    console.error("Error setting hapto:", error);
-    showErrorToast("Failed to set hapto");
-  } finally {
-    setIsMonthLoading(false);
-  }
-};
-
+  };
 
   const handleAddNewMonth = async () => {
     let newMonth: string;
@@ -640,35 +540,11 @@ const handleSetHapto = async () => {
 
       await addNewMonthApi();
 
-      const monthResponse = await getMonthApi();
-
-      const monthObjects = Array.isArray(monthResponse)
-        ? monthResponse
-          .filter((m) => m && m._id && m.month)
-          .sort((a, b) => {
-            const da = new Date(a.month + "-01");
-            const db = new Date(b.month + "-01");
-            return db.getTime() - da.getTime();
-          })
-        : [];
-
-      if (monthObjects.length === 0) {
-        showErrorToast("Month creation failed");
-        return;
-      }
-
-      const latestMonthName = monthObjects[0].month;
-      setMonths(monthObjects);
-      setSelectedMonth(latestMonthName);
-
-      const latestMonthId = monthObjects[0]._id;
-
-      const data = await getMemberDataApi(latestMonthId);
-      setMemberData(data);
-      setFilteredMemberData(data);
-
-      showSuccessToast(`મહિનો ${latestMonthName} બનાવાયો!`);
+      showSuccessToast("નવો મહિનો બનાવાયો!");
       setIsAddMonthDialogOpen(false);
+
+      router.replace("/mandal/analytics");
+      router.refresh();
     } catch (error: unknown) {
       console.error("Error creating new month:", error);
 
@@ -680,15 +556,15 @@ const handleSetHapto = async () => {
           ?.data?.error === "string"
       ) {
         showErrorToast(
-          (error as { response: { data: { error: string } } }).response.data.error
+          (error as { response: { data: { error: string } } }).response.data
+            .error,
         );
       } else if (error instanceof Error) {
         showErrorToast(error.message);
       } else {
         showErrorToast("નવો મહિનો બનાવવામાં ત્રુટિ");
       }
-    }
-    finally {
+    } finally {
       setIsAddingMonth(false);
       setIsTableLoading(false);
     }
@@ -746,10 +622,7 @@ const handleSetHapto = async () => {
       (row.interest || 0) + (row.pendingInterest || 0);
 
     const lockPayment =
-      (row.paidInstallment || 0) > 0 ||
-      (row.paidInterest || 0) > 0;
-
-
+      (row.paidInstallment || 0) > 0 || (row.paidInterest || 0) > 0;
 
     setDisplayTotals({
       installment: totalInstallmentToShow,
@@ -773,7 +646,6 @@ const handleSetHapto = async () => {
     setIsAddDialogOpen(true);
   };
 
-
   const handleInputBlur = (field: keyof Omit<FormData, "subUserId">) => {
     if (formData[field] === "") {
       if (field === "installment") {
@@ -795,123 +667,112 @@ const handleSetHapto = async () => {
     }
   };
 
- const handleExtraKeyDown = async (e: any) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
+  const handleExtraKeyDown = async (e: any) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
 
-    const monthId = getSelectedMonthObjectId();
-    if (!monthId) return;
+      const monthId = getSelectedMonthObjectId();
+      if (!monthId) return;
 
-    if (!extraExpense || Number(extraExpense) < 0) {
-      showErrorToast("Enter valid extra expense");
-      return;
-    }
+      if (!extraExpense || Number(extraExpense) < 0) {
+        showErrorToast("Enter valid extra expense");
+        return;
+      }
 
-    try {
-      await setExtraExpenseApi(monthId, Number(extraExpense));
+      try {
+        await setExtraExpenseApi(monthId, Number(extraExpense));
 
-      showSuccessToast("Extra expense updated!");
+        showSuccessToast("Extra expense updated!");
 
-      setMonths((prev) =>
-        prev.map((m) =>
-          m._id === monthId
-            ? { ...m, extraExpence: Number(extraExpense) }
-            : m
-        )
-      );
+        setIsEditingExtra(false);
 
-      setSelectedMonthExtraExpense(Number(extraExpense));
-      setIsEditingExtra(false); 
-    } catch (error) {
-      console.error(error);
-      showErrorToast("Failed to update extra expense");
-    }
-  }
-};
-
-useEffect(() => {
-  const handleClickOutside = (event: MouseEvent) => {
-    if (
-      isEditingExtra &&
-      extraRef.current &&
-      !extraRef.current.contains(event.target as Node)
-    ) {
-      setIsEditingExtra(false);
-      setExtraExpense("");
+        // Tell Next.js to run SSR again to inherently fetch and push dynamic changes without state bloat.
+        router.refresh();
+      } catch (error) {
+        console.error(error);
+        showErrorToast("Failed to update extra expense");
+      }
     }
   };
 
-  document.addEventListener("mousedown", handleClickOutside);
-  return () => {
-    document.removeEventListener("mousedown", handleClickOutside);
-  };
-}, [isEditingExtra]);
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        isEditingExtra &&
+        extraRef.current &&
+        !extraRef.current.contains(event.target as Node)
+      ) {
+        setIsEditingExtra(false);
+        setExtraExpense("");
+      }
+    };
 
-const annualCalculations = useMemo(() => {
-  const allData = allMonthsData.flatMap((m) => m.data);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isEditingExtra]);
 
-  const uniqueMemberIds = new Set(
-    allData.map((row) => row.subUser?._id).filter(Boolean)
-  );
+  const annualCalculations = useMemo(() => {
+    const allData = allMonthsData.flatMap((m) => m.data);
 
-  const totalInstallments = allData.reduce(
-    (sum, row) => sum + (row.paidInstallment || 0),
-    0
-  );
+    const uniqueMemberIds = new Set(
+      allData.map((row) => row.subUser?._id).filter(Boolean),
+    );
 
-  const totalInterest = allData.reduce(
-    (sum, row) => sum + (row.paidInterest || 0),
-    0
-  );
+    const totalInstallments = allData.reduce(
+      (sum, row) => sum + (row.paidInstallment || 0),
+      0,
+    );
 
-  const totalFine= allData.reduce(
-    (sum, row) => sum + (row.fine || 0),
-    0
-  );
+    const totalInterest = allData.reduce(
+      (sum, row) => sum + (row.paidInterest || 0),
+      0,
+    );
 
-  const totalWithdrawals = allData.reduce(
-    (sum, row) => sum + (row.paidWithdrawal || 0),
-    0
-  );
+    const totalFine = allData.reduce((sum, row) => sum + (row.fine || 0), 0);
 
-  const totalNewWithdrawals = allData.reduce(
-    (sum, row) => sum + (row.newWithdrawal || 0),
-    0
-  );
+    const totalWithdrawals = allData.reduce(
+      (sum, row) => sum + (row.paidWithdrawal || 0),
+      0,
+    );
+
+    const totalNewWithdrawals = allData.reduce(
+      (sum, row) => sum + (row.newWithdrawal || 0),
+      0,
+    );
 
     const totalExtraExpense = months.reduce(
-  (sum, m) => sum + (m.extraExpence || 0),
-  0
-);
+      (sum, m) => sum + (m.extraExpence || 0),
+      0,
+    );
 
-  const totalMembers = uniqueMemberIds.size;
+    const totalMembers = uniqueMemberIds.size;
 
-  const totalName = totalInstallments + totalInterest ;
-  const bandSilak = totalName - totalNewWithdrawals - totalExtraExpense + totalFine ;
-  const Mandalcash = bandSilak;
+    const totalName = totalInstallments + totalInterest + totalFine + totalWithdrawals;
+    const bandSilak = totalName - totalNewWithdrawals - totalExtraExpense;
+    const Mandalcash = totalName;
 
-  const interestPerPerson =
-    totalMembers > 0 ? totalInterest / totalMembers : 0;
+    const interestPerPerson =
+      totalMembers > 0 ? totalInterest / totalMembers : 0;
 
-  const perPerson =
-    totalMembers > 0 ? bandSilak / totalMembers : 0;
+    const perPerson = totalMembers > 0 ? bandSilak / totalMembers : 0;
 
-  return {
-    totalInstallments,
-    totalInterest,
-    totalWithdrawals,
-    totalNewWithdrawals,
-    totalMembers,
-    totalName,
-    bandSilak,
-    Mandalcash,
-    interestPerPerson,
-    perPerson,
-    totalExtraExpense,
-    totalFine,
-  };
-}, [allMonthsData]);
-
+    return {
+      totalInstallments,
+      totalInterest,
+      totalWithdrawals,
+      totalNewWithdrawals,
+      totalMembers,
+      totalName,
+      bandSilak,
+      Mandalcash,
+      interestPerPerson,
+      perPerson,
+      totalExtraExpense,
+      totalFine,
+    };
+  }, [allMonthsData, months]);
 
   if (isDashboardLoading && !hasDataLoaded) {
     return (
@@ -965,7 +826,10 @@ const annualCalculations = useMemo(() => {
             <div className="h-6 w-48 bg-gray-300 rounded animate-pulse mb-4"></div>
             <div className="grid grid-cols-2 gap-3">
               {Array.from({ length: 4 }).map((_, index) => (
-                <div key={`init-calc-${index}`} className="bg-gray-100 border border-gray-200 rounded-md p-3 animate-pulse">
+                <div
+                  key={`init-calc-${index}`}
+                  className="bg-gray-100 border border-gray-200 rounded-md p-3 animate-pulse"
+                >
                   <div className="h-4 w-24 bg-gray-300 rounded mb-2"></div>
                   <div className="h-8 w-20 bg-gray-300 rounded"></div>
                 </div>
@@ -974,12 +838,11 @@ const annualCalculations = useMemo(() => {
           </div>
         </div>
       </>
-    )
+    );
   }
 
   return (
     <>
-
       <PageHeader
         title="Monthly Ledger"
         description="View your monthly ledger, withdrawals, and interest earnings in one place."
@@ -993,7 +856,16 @@ const annualCalculations = useMemo(() => {
     "
         >
           <div>
-            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <Select
+              value={selectedMonth}
+              onValueChange={(val) => {
+                setSelectedMonth(val);
+                const matchedMonth = months.find((m) => m.month === val);
+                if (matchedMonth) {
+                  router.push(`?monthId=${matchedMonth._id}`);
+                }
+              }}
+            >
               <SelectTrigger className="w-full sm:w-[180px] shrink-0">
                 <Calendar className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Select month" />
@@ -1015,7 +887,7 @@ const annualCalculations = useMemo(() => {
               variant="default"
               onClick={handleAddNewMonth}
               className="w-full sm:w-auto lg:w-auto shrink-0"
-              disabled={isAddingMonth || subUsers.length === 0}
+              disabled={isAddingMonth || subUsers.length === 0 || isPastMonth(selectedMonth)}
             >
               {isAddingMonth ? (
                 <Loader
@@ -1043,6 +915,7 @@ const annualCalculations = useMemo(() => {
                   <Button
                     variant="default"
                     className="w-full sm:w-auto lg:w-auto shrink-0"
+                    disabled={isPastMonth(selectedMonth)}
                   >
                     <Plus className="h-4 w-4" />
                     <span className="ml-2">Add Member</span>
@@ -1160,6 +1033,7 @@ const annualCalculations = useMemo(() => {
                   <Button
                     variant="default"
                     className="w-full sm:w-auto lg:w-auto shrink-0"
+                    disabled={isPastMonth(selectedMonth)}
                   >
                     <Plus className="h-4 w-4" />
                     <span className="ml-2">
@@ -1286,8 +1160,15 @@ const annualCalculations = useMemo(() => {
                     id="installment"
                     type="number"
                     value={formData.installment}
+                    max={displayTotals.installment}
                     onChange={(e) =>
-                      setFormData({ ...formData, installment: e.target.value })
+                      setFormData({
+                        ...formData,
+                        installment: Math.min(
+                          Number(e.target.value || 0),
+                          displayTotals.installment,
+                        ).toString(),
+                      })
                     }
                     onFocus={() => handleInputFocus("installment")}
                     onBlur={() => handleInputBlur("installment")}
@@ -1328,8 +1209,15 @@ const annualCalculations = useMemo(() => {
                     id="interest"
                     type="number"
                     value={formData.interest}
+                    max={displayTotals.interest}
                     onChange={(e) =>
-                      setFormData({ ...formData, interest: e.target.value })
+                      setFormData({
+                        ...formData,
+                        interest: Math.min(
+                          Number(e.target.value || 0),
+                          displayTotals.interest,
+                        ).toString(),
+                      })
                     }
                     onFocus={() => handleInputFocus("interest")}
                     onBlur={() => handleInputBlur("interest")}
@@ -1342,7 +1230,6 @@ const annualCalculations = useMemo(() => {
                     Total (Current + Pending): ₹{displayTotals.interest}
                   </p>
                 </div>
-
               </div>
               <div className="space-y-2">
                 <Label htmlFor="fine" className="text-sm sm:text-base">
@@ -1413,13 +1300,14 @@ const annualCalculations = useMemo(() => {
                   }
                   className={`
         border-2
-        ${isInstallmentPaid
-                      ? "border-green-600 data-[state=checked]:bg-green-600"
-                      : formData.pendingInstallment &&
-                        parseInt(formData.pendingInstallment) > 0
-                        ? "border-red-600"
-                        : "border-gray-400"
-                    }
+        ${
+          isInstallmentPaid
+            ? "border-green-600 data-[state=checked]:bg-green-600"
+            : formData.pendingInstallment &&
+                parseInt(formData.pendingInstallment) > 0
+              ? "border-red-600"
+              : "border-gray-400"
+        }
       `}
                 />
                 <Label
@@ -1585,12 +1473,12 @@ const annualCalculations = useMemo(() => {
                 <Badge variant="outline">
                   {selectedMonth
                     ? new Date(selectedMonth + "-01").toLocaleDateString(
-                      "en-GB",
-                      {
-                        month: "short",
-                        year: "numeric",
-                      }
-                    )
+                        "en-GB",
+                        {
+                          month: "short",
+                          year: "numeric",
+                        },
+                      )
                     : "No Month Selected"}
                 </Badge>
                 <Badge variant="outline" className="bg-blue-100 text-blue-800">
@@ -1607,11 +1495,9 @@ const annualCalculations = useMemo(() => {
                 </Badge>
               </div>
             </div>
-            <div  ref={extraRef} className="flex items-center gap-4">
+            <div ref={extraRef} className="flex items-center gap-4">
               <div className="flex items-center gap-4">
-                <span className="text-sm font-medium">
-                  Extra Expense :
-                </span>
+                <span className="text-sm font-medium">Extra Expense :</span>
 
                 {!isEditingExtra ? (
                   <>
@@ -1619,20 +1505,34 @@ const annualCalculations = useMemo(() => {
                       ₹{selectedMonthExtraExpense || 0}
                     </span>
 
-                  <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => {
-                    setIsEditingExtra(true);
-                    setExtraExpense(selectedMonthExtraExpense.toString());
-                  }}
-                  className="h-8 w-8"
-                >
-                  <svg className="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-                    <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m14.304 4.844 2.852 2.852M7 7H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-4.5m2.409-9.91a2.017 2.017 0 0 1 0 2.853l-6.844 6.844L8 14l.713-3.565 6.844-6.844a2.015 2.015 0 0 1 2.852 0Z"/>
-                  </svg>
-                </Button>
-
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      disabled={isPastMonth(selectedMonth)}
+                      onClick={() => {
+                        setIsEditingExtra(true);
+                        setExtraExpense(selectedMonthExtraExpense.toString());
+                      }}
+                      className="h-8 w-8"
+                    >
+                      <svg
+                        className="w-6 h-6 text-gray-800 dark:text-white"
+                        aria-hidden="true"
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke="currentColor"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="m14.304 4.844 2.852 2.852M7 7H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-4.5m2.409-9.91a2.017 2.017 0 0 1 0 2.853l-6.844 6.844L8 14l.713-3.565 6.844-6.844a2.015 2.015 0 0 1 2.852 0Z"
+                        />
+                      </svg>
+                    </Button>
                   </>
                 ) : (
                   <Input
@@ -1662,25 +1562,24 @@ const annualCalculations = useMemo(() => {
                   exportLedgerPdf({
                     mandalName,
                     selectedMonth,
+                    monthdata: months,
                     rows: filteredMemberData,
                     calculateCarriedForwardAmount,
                     getDisplayInstallmentValue,
                     getDisplayInterestValue,
-                    annualCalculations, 
+                    annualCalculations,
                   })
                 }
               >
                 Export
               </Button>
-
-
             </div>
           </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto w-full sm:block">
             <div className="max-h-[360px] overflow-y-auto">
-             <Table className="min-w-[1000px] w-full">
+              <Table className="min-w-[1000px] w-full">
                 <TableHeader className="sticky top-0 z-20 bg-white">
                   <TableRow className="bg-muted/50">
                     <TableHead className="sticky top-0 bg-white z-30 text-center py-4"></TableHead>
@@ -1777,7 +1676,7 @@ const annualCalculations = useMemo(() => {
                       const requiredInstallment = installmentInfo.value;
 
                       const isFullyPaid =
-                        (row.paidInstallment) >= requiredInstallment;
+                        row.paidInstallment >= requiredInstallment;
 
                       return (
                         <TableRow key={row._id} className="h-16">
@@ -1801,7 +1700,8 @@ const annualCalculations = useMemo(() => {
                           <TableCell className="text-center text-xs md:text-sm py-4">
                             <div className="flex flex-col items-center">
                               {(() => {
-                                const installmentInfo = getDisplayInstallmentValue(row);
+                                const installmentInfo =
+                                  getDisplayInstallmentValue(row);
 
                                 return (
                                   <div className="flex flex-col items-center">
@@ -1811,7 +1711,8 @@ const annualCalculations = useMemo(() => {
 
                                     {installmentInfo.hasPending && (
                                       <span className="text-[10px] text-red-600 mt-0.5 font-medium">
-                                        (empty installment : {installmentInfo.pendingAmount})
+                                        (empty installment :{" "}
+                                        {installmentInfo.pendingAmount})
                                       </span>
                                     )}
                                   </div>
@@ -1842,7 +1743,8 @@ const annualCalculations = useMemo(() => {
                           <TableCell className="text-center text-xs md:text-sm py-4">
                             <div className="flex flex-col items-center">
                               {(() => {
-                                const interestInfo = getDisplayInterestValue(row);
+                                const interestInfo =
+                                  getDisplayInterestValue(row);
 
                                 return (
                                   <>
@@ -1854,7 +1756,8 @@ const annualCalculations = useMemo(() => {
 
                                     {interestInfo.hasPending && (
                                       <span className="text-[10px] text-red-600 mt-0.5 font-medium">
-                                        (empty interest : ₹{interestInfo.pendingAmount})
+                                        (empty interest : ₹
+                                        {interestInfo.pendingAmount})
                                       </span>
                                     )}
                                   </>
@@ -1880,25 +1783,28 @@ const annualCalculations = useMemo(() => {
                           </TableCell>
                           <TableCell className="text-center py-4">
                             {!isPastMonth(selectedMonth) && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleRowAction(row)}
-                              disabled={updatingMemberId === row?.subUser?._id}
-                              className="text-xs h-8 px-2 md:text-sm md:h-9 md:px-3"
-                            >
-                              {updatingMemberId === row?.subUser?._id ? (
-                                <Loader
-                                  size="sm"
-                                  variant="primary"
-                                  type="dots"
-                                  className="!gap-0"
-                                  show
-                                />
-                              ) : (
-                                "Update"
-                              )}
-                            </Button>) }  
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleRowAction(row)}
+                                disabled={
+                                  updatingMemberId === row?.subUser?._id
+                                }
+                                className="text-xs h-8 px-2 md:text-sm md:h-9 md:px-3"
+                              >
+                                {updatingMemberId === row?.subUser?._id ? (
+                                  <Loader
+                                    size="sm"
+                                    variant="primary"
+                                    type="dots"
+                                    className="!gap-0"
+                                    show
+                                  />
+                                ) : (
+                                  "Update"
+                                )}
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
                       );
@@ -1911,10 +1817,9 @@ const annualCalculations = useMemo(() => {
         </CardContent>
       </Card>
 
-
       <div className="md:hidden sticky top-0 z-30 bg-white px-4 py-2 flex items-center justify-between gap-3">
         {/* Search Bar */}
-        <div className="relative flex-1"> 
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
             type="search"
@@ -1933,52 +1838,66 @@ const annualCalculations = useMemo(() => {
           <div className="px-3 py-2 bg-yellow-50 rounded-md border text-xs font-medium text-gray-600 whitespace-nowrap">
             {selectedMonth
               ? new Date(selectedMonth + "-01").toLocaleString("default", {
-                month: "short",
-                year: "numeric",
-              })
+                  month: "short",
+                  year: "numeric",
+                })
               : "—"}
           </div>
         )}
       </div>
-      <div  ref={extraRef} className="lg:hidden flex items-center justify-center mt-2 gap-4">
-              <div className="flex items-center gap-4">
-                <span className="text-sm font-medium">
-                  Extra Expense :
-                </span>
+      <div
+        ref={extraRef}
+        className="lg:hidden flex items-center justify-center mt-2 gap-4"
+      >
+        <div className="flex items-center gap-4">
+          <span className="text-sm font-medium">Extra Expense :</span>
 
-                {!isEditingExtra ? (
-                  <>
-                    <span className="text-sm font-semibold">
-                      ₹{selectedMonthExtraExpense || 0}
-                    </span>
+          {!isEditingExtra ? (
+            <>
+              <span className="text-sm font-semibold">
+                ₹{selectedMonthExtraExpense || 0}
+              </span>
 
-                  <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => {
-                    setIsEditingExtra(true);
-                    setExtraExpense(selectedMonthExtraExpense.toString());
-                  }}
-                  className="h-8 w-8"
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setIsEditingExtra(true);
+                  setExtraExpense(selectedMonthExtraExpense.toString());
+                }}
+                className="h-8 w-8"
+              >
+                <svg
+                  className="w-6 h-6 text-gray-800 dark:text-white"
+                  aria-hidden="true"
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  fill="none"
+                  viewBox="0 0 24 24"
                 >
-                  <svg className="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-                    <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m14.304 4.844 2.852 2.852M7 7H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-4.5m2.409-9.91a2.017 2.017 0 0 1 0 2.853l-6.844 6.844L8 14l.713-3.565 6.844-6.844a2.015 2.015 0 0 1 2.852 0Z"/>
-                  </svg>
-                </Button>
-
-                  </>
-                ) : (
-                  <Input
-                    type="number"
-                    value={extraExpense}
-                    onChange={(e) => setExtraExpense(e.target.value)}
-                    onKeyDown={handleExtraKeyDown}
-                    className="w-32"
-                    autoFocus
+                  <path
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="m14.304 4.844 2.852 2.852M7 7H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-4.5m2.409-9.91a2.017 2.017 0 0 1 0 2.853l-6.844 6.844L8 14l.713-3.565 6.844-6.844a2.015 2.015 0 0 1 2.852 0Z"
                   />
-                )}
-              </div>
-              </div>
+                </svg>
+              </Button>
+            </>
+          ) : (
+            <Input
+              type="number"
+              value={extraExpense}
+              onChange={(e) => setExtraExpense(e.target.value)}
+              onKeyDown={handleExtraKeyDown}
+              className="w-32"
+              autoFocus
+            />
+          )}
+        </div>
+      </div>
 
       <div
         className="md:block lg:block overflow-y-auto px-4"
@@ -2060,12 +1979,12 @@ const annualCalculations = useMemo(() => {
           ) : (
             filteredMemberData.map((row, index) => {
               const carriedForwardAmount = calculateCarriedForwardAmount(
-                row?.subUser?._id
+                row?.subUser?._id,
               );
 
               const installmentInfo = getDisplayInstallmentValue(row);
               const interestInfo = getDisplayInterestValue(row);
-              
+
               const isFullyPaid =
                 (row.paidInstallment || 0) >= installmentInfo.value;
 
@@ -2101,7 +2020,8 @@ const annualCalculations = useMemo(() => {
                         <span>₹{installmentInfo.value.toLocaleString()}</span>
                         {installmentInfo.hasPending && (
                           <span className="text-[9px] text-red-600 font-medium">
-                            (empty installment : ₹{installmentInfo.pendingAmount})
+                            (empty installment : ₹
+                            {installmentInfo.pendingAmount})
                           </span>
                         )}
                       </div>
@@ -2112,7 +2032,9 @@ const annualCalculations = useMemo(() => {
                       <div className="flex flex-col items-end">
                         {carriedForwardAmount > 0 ? (
                           <>
-                            <span>₹{carriedForwardAmount.toLocaleString()}</span>
+                            <span>
+                              ₹{carriedForwardAmount.toLocaleString()}
+                            </span>
                             {row.withdrawal > 0 &&
                               row.withdrawal !== carriedForwardAmount && (
                                 <span className="text-[9px] text-gray-500">
@@ -2172,7 +2094,9 @@ const annualCalculations = useMemo(() => {
                     <div className="flex justify-between text-[10px]">
                       <span className="text-gray-600">કુલ (હપ્તો+વ્યાજ)</span>
                       <span className="font-semibold text-green-700">
-                        {(row.paidInterest + row.paidInstallment).toLocaleString()}
+                        {(
+                          row.paidInterest + row.paidInstallment
+                        ).toLocaleString()}
                       </span>
                     </div>
                   </div>
@@ -2190,7 +2114,13 @@ const annualCalculations = useMemo(() => {
                     "
                   >
                     {updatingMemberId === row?.subUser?._id ? (
-                      <Loader size="sm" variant="primary" type="dots" className="!gap-0" show />
+                      <Loader
+                        size="sm"
+                        variant="primary"
+                        type="dots"
+                        className="!gap-0"
+                        show
+                      />
                     ) : (
                       "Update"
                     )}
@@ -2316,35 +2246,6 @@ const annualCalculations = useMemo(() => {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-xs font-medium text-purple-600">
-                          કુલ રકમ
-                        </p>
-                        <p className="text-lg font-bold text-purple-800">
-                          ₹{calculations.totalName.toLocaleString()}
-                        </p>
-                      </div>
-                      <div className="h-6 w-6 bg-purple-100 rounded-full flex items-center justify-center">
-                        <svg
-                          className="h-3 w-3 text-purple-600"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                          />
-                        </svg>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card className="bg-purple-50 border-purple-200">
-                  <CardContent className="p-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs font-medium text-purple-600">
                           કુલ દંડ
                         </p>
                         <p className="text-lg font-bold text-purple-800">
@@ -2369,18 +2270,47 @@ const annualCalculations = useMemo(() => {
                     </div>
                   </CardContent>
                 </Card>
+                <Card className="bg-purple-50 border-purple-200">
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-medium text-purple-600">
+                          વધારાના ખર્ચ
+                        </p>
+                        <p className="text-lg font-bold text-purple-800">
+                          ₹{selectedMonthExtraExpense.toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="h-6 w-6 bg-purple-100 rounded-full flex items-center justify-center">
+                        <svg
+                          className="h-3 w-3 text-purple-600"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M7 16l-4-4m0 0l4-4m-4 4h18"
+                          />
+                        </svg>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
                 <Card className="bg-green-50 border-green-200">
                   <CardContent className="p-3">
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-xs font-medium text-green-600">
-                          વધારાના ખર્ચ
+                          કુલ રકમ
                         </p>
                         <p className="text-lg font-bold text-green-800">
-                          ₹{selectedMonthExtraExpense.toLocaleString()}
+                          ₹{calculations.totalName.toLocaleString()}
                         </p>
                       </div>
-                      <div className="h-6 w-6 bg-orange-100 rounded-full flex items-center justify-center">
+                      <div className="h-6 w-6 bg-green-100 rounded-full flex items-center justify-center">
                         <svg
                           className="h-3 w-3 text-green-600"
                           fill="none"
@@ -2391,7 +2321,7 @@ const annualCalculations = useMemo(() => {
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeWidth={2}
-                            d="M7 16l-4-4m0 0l4-4m-4 4h18"
+                            d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
                           />
                         </svg>
                       </div>
@@ -2453,7 +2383,7 @@ const annualCalculations = useMemo(() => {
                       {
                         month: "short",
                         year: "numeric",
-                      }
+                      },
                     )}
                   </SelectItem>
                 ))}
@@ -2504,11 +2434,12 @@ const annualCalculations = useMemo(() => {
               exportLedgerPdf({
                 mandalName,
                 selectedMonth,
+                monthdata: months,
                 rows: filteredMemberData,
                 calculateCarriedForwardAmount,
                 getDisplayInstallmentValue,
                 getDisplayInterestValue,
-                annualCalculations, 
+                annualCalculations,
               })
             }
             className="flex flex-col items-center text-xs px-3"
@@ -2517,7 +2448,6 @@ const annualCalculations = useMemo(() => {
             <FileText className="h-5 w-5" />
             <span className="text-[10px]">PDF</span>
           </button>
-
         </div>
       </MobileFooter>
     </>

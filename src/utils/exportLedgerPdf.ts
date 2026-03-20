@@ -8,6 +8,7 @@ export async function exportLedgerPdf({
   getDisplayInstallmentValue,
   getDisplayInterestValue,
   annualCalculations,
+  monthdata
 }: {
   mandalName: string;
   selectedMonth: string;
@@ -24,6 +25,7 @@ export async function exportLedgerPdf({
     pendingAmount: number;
   };
   annualCalculations: any;
+  monthdata : any ; 
 }) {
 
   const regularFont = await fetch("/fonts/NotoSansGujarati-Regular.ttf");
@@ -49,6 +51,7 @@ export async function exportLedgerPdf({
   let totalCarriedForward = 0;
   let totalInterest = 0;
   let totalFine = 0;
+  let totalWithdrawal = 0;
   let totalPaidWithdrawal = 0;
   let totalNewWithdrawal = 0;
   let grandTotal = 0;
@@ -59,18 +62,29 @@ export async function exportLedgerPdf({
     const interestInfo = getDisplayInterestValue(row);
     const carriedForward = calculateCarriedForwardAmount(row?.subUser?._id);
 
-    totalInstallment += installmentInfo.value || 0;
+    totalInstallment += row.paidInstallment || 0;
     totalCarriedForward += carriedForward || 0;
-    totalInterest += interestInfo.value || 0;
+    totalInterest += row.paidInterest || 0;
     totalFine += row.fine || 0;
+    totalWithdrawal += row.withdrawal || 0 ;
     totalPaidWithdrawal += row.paidWithdrawal || 0;
     totalNewWithdrawal += row.newWithdrawal || 0;
     grandTotal += (row?.total)
+    
+    
     
     if (installmentInfo.hasPending) totalPending += installmentInfo.pendingAmount;
     if (interestInfo.hasPending) totalPending += interestInfo.pendingAmount;
   });
 
+
+  const selectedMonthData = monthdata.find(
+    (m: any) => m.month === selectedMonth
+  );
+
+  const selectedMonthExtraExpense = selectedMonthData?.extraExpence || 0;
+  const totalAmount = (totalInstallment + totalPaidWithdrawal + totalFine + totalInterest);
+  const bandSilak = totalAmount - totalNewWithdrawal ;
 
   const tableBody: any[] = [];
 
@@ -141,75 +155,117 @@ export async function exportLedgerPdf({
         ],
       },
       layout: "noBorders",
-      margin: [0, 0, 0, 10],
+      margin: [0, 0, 0, 0],
     },
 
     {
-      table: {
-        widths: ["*", "*", "*", "*"],
-        body: [
-          [
-            {
-              stack: [
-                { text: "કુલ સભ્યો", fontSize: 8, color: "#666666", alignment: "center" },
-                { text: annualCalculations.totalMembers.toString(), fontSize: 18, bold: true, color: "#2a2a2a", alignment: "center", margin: [0, 1, 0, 0] },
-              ],
-              fillColor: "#ffffff",
-              margin: [0, 4, 0, 4],
-            },
-
-            {
-              stack: [
-                { text: "કુલ હપ્તો", fontSize: 8, color: "#666666", alignment: "center" },
-                { text: `₹${grandTotal}`, fontSize: 18, bold: true, color: "#2a2a2a", alignment: "center", margin: [0, 1, 0, 0] },
-              ],
-              fillColor: "#ffffff",
-              margin: [0, 4, 0, 4],
-            },
-
-            {
-              stack: [
-                { text: "કુલ વ્યાજ", fontSize: 8, color: "#666666", alignment: "center" },
-                { text: `₹${totalInterest}`, fontSize: 18, bold: true, color: "#2a2a2a", alignment: "center", margin: [0, 1, 0, 0] },
-              ],
-              fillColor: "#ffffff",
-              margin: [0, 4, 0, 4],
-            },
-
-            {
-              stack: [
-                { text: "કુલ દંડ", fontSize: 8, color: "#666666", alignment: "center" },
-                { text: `₹${totalFine}`, fontSize: 18, bold: true, color: "#2a2a2a", alignment: "center", margin: [0, 1, 0, 0] },
-              ],
-              fillColor: "#ffffff",
-              margin: [0, 4, 0, 4],
-            },
-          ],
-        ],
-      },
-      layout: {
-        hLineWidth: (i: number, node?: any) => (i === 0 || i === (node?.table?.body?.length || 1)) ? 1 : 0,
-        vLineWidth: () => 0.5,
-        hLineColor: () => "#cccccc",
-        vLineColor: () => "#cccccc",
-        paddingLeft: () => 6,
-        paddingRight: () => 6,
-        paddingTop: () => 6,
-        paddingBottom: () => 6,
-      },
-      margin: [0, 0, 0, 4],
+      text: "માસિક સારાંશ (Monthly Financial Summary)",
+      fontSize: 12,
+      bold: true,
+      alignment: "center",
+      margin: [0, 5 , 0, 10],
     },
 
+    {
+      columns: [
+        {
+          width: "50%",
+          table: {
+            widths: ["*", "auto"],
+            body: [
+              [
+                { text: "Total Installments ( કુલ હપ્તો )", bold: true },
+                {
+                  text: `₹${totalInstallment.toLocaleString()}`,
+                  alignment: "right",
+                },
+              ],
+              [
+                { text: "Total Interest ( કુલ વ્યાજ )", bold: true },
+                {
+                  text: `₹${totalInterest.toLocaleString()}`,
+                  alignment: "right",
+                },
+              ],
+              [
+                { text: "Total Withdrawals ( ઉપાડ જમા )", bold: true },
+                {
+                  text: `₹${totalPaidWithdrawal.toLocaleString()}`,
+                  alignment: "right",
+                },
+              ],
+              [
+                { text: "New Withdrawals ( નવો ઉપાડ )", bold: true },
+                {
+                  text: `₹${totalNewWithdrawal.toLocaleString()}`,
+                  alignment: "right",
+                },
+              ],
+            ],
+          },
+          layout: "",
+          margin: [0, 0, 5, 0],
+        },
 
-  
-
+        {
+          width: "50%",
+          table: {
+            widths: ["*", "auto"],
+            body: [
+              [
+                { text: "Extra Expense ( વધારાનો ખર્ચ )", bold: true },
+                {
+                  text: `₹${selectedMonthExtraExpense.toLocaleString()}`,
+                  alignment: "right",
+                },
+              ],
+              [
+                {
+                  text: "Bandh Silak ( શ્રી બંધ સિલક )",
+                  bold: true,
+                  color: "#166534",
+                },
+                {
+                  text: `₹${bandSilak.toLocaleString()}`,
+                  bold: true,
+                  alignment: "right",
+                  color: "#166534",
+                },
+              ],
+              [
+                { text: "Fine ( દંડ )", bold: true },
+                {
+                  text: `₹${totalFine.toLocaleString()}`,
+                  alignment: "right",
+                },
+              ],
+              [
+                {
+                  text: "Total ( કુલ રકમ )",
+                  bold: true,
+                  color: "#1d4ed8",
+                },
+                {
+                  text: `₹${totalAmount.toLocaleString()}`,
+                  bold: true,
+                  alignment: "right",
+                  color: "#1d4ed8",
+                },
+              ],
+            ],
+          },
+          layout: "",
+        },
+      ],
+    },
+    // ===== END OF MONTHLY FINANCIAL SUMMARY SECTION =====
 
     {
       text: "સભ્યોની વિગતવાર માહિતી",
       fontSize: 10,
       bold: true,
       color: "#2a2a2a",
-      margin: [0, 0, 0, 2],
+      margin: [0, 15, 0, 2],
     },
 
     {
@@ -260,38 +316,8 @@ content.push({
   fontSize: 12,
   bold: true,
   alignment: "center",
-  margin: [0, 25, 0, 15],
+  margin: [0, 30, 0, 5],
 });
-
-content.push({
-  table: {
-    widths: ["*"],
-    body: [
-      [
-        {
-          stack: [
-            {
-              text: "Total Members ( કુલ સભ્ય )",
-              bold: true,
-              fontSize: 10,
-              alignment: "center",
-            },
-            {
-              text: annualCalculations.totalMembers.toString(),
-              bold: true,
-              fontSize: 20,
-              alignment: "center",
-              margin: [0, 5, 0, 0],
-            },
-          ],
-        },
-      ],
-    ],
-  },
-  layout: "noBorders",
-  margin: [0, 0, 0, 20],
-});
-
 
 content.push({
   columns: [
@@ -351,7 +377,7 @@ content.push({
         ],
       },
       layout: "",
-      margin: [0, 0, 15, 0],
+      margin: [0, 0, 5, 0],
     },
 
     /* ===== RIGHT SIDE ===== */
